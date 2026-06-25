@@ -1,0 +1,17 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+
+dist/
+client/dist/
+
+.env
+.env.*
+!.env.example
+
+*.log
+npm-debug.log*
+
+server/*.sqlite
+server/*.sqlite-wal
+server/*.sqlite-shm
