@@ -25,7 +25,7 @@ const defaultScoreboard = {
 
 const rules = [
   { title: "Fase de grupos", items: ["Placar exato: 5 pontos", "Vencedor + gols do vencedor corretos: 3 pontos", "Apenas vencedor ou empate: 2 pontos"] },
-  { title: "Mata-mata", items: ["16-avos, oitavas, quartas, semifinal, 3º lugar e final seguem a regra de mata-mata", "Placar exato + classificado: 8 pontos", "Apenas vencedor ou empate no tempo normal: 4 pontos", "Apenas classificado: 2 ponto"] },
+  { title: "Mata-mata", items: ["16-avos, oitavas, quartas, semifinal, 3º lugar e final seguem a regra de mata-mata", "Placar exato: 6 pontos", "Classificado correto: +2 pontos", "Vencedor + gols do vencedor corretos: 4 pontos", "Apenas vencedor ou empate: 2 pontos"] },
   { title: "Bonus", items: ["Campeao: 15 pontos", "Vice-campeao: 10 pontos", "Artilheiro: 8 pontos", "Terceiro lugar: 5 pontos", "Pode ser alterado ate 5 minutos antes do primeiro jogo da Copa"] },
   { title: "Prazo", items: ["Palpites podem ser alterados ate 5 minutos antes do inicio de cada partida."] },
   { title: "Desempate", items: ["Maior numero de placares exatos", "Maior numero de acertos no mata-mata", "Acerto do campeao"] }
@@ -306,6 +306,41 @@ function buildKickoffAt(kickoffDate, kickoffTime) {
   if (Number.isNaN(date.getTime())) return null;
 
   return date.toISOString();
+}
+
+function hasScoreValue(value) {
+  return value !== "" && value !== null && value !== undefined;
+}
+
+function getAllowedQualifiedTeams(match, homeScore, awayScore) {
+  if (match.stage === "GROUP") return [];
+
+  const teams = [match.home_team, match.away_team];
+  if (!hasScoreValue(homeScore) || !hasScoreValue(awayScore)) return teams;
+
+  const numericHome = Number(homeScore);
+  const numericAway = Number(awayScore);
+  if (Number.isNaN(numericHome) || Number.isNaN(numericAway)) return teams;
+
+  if (numericHome > numericAway) return [match.home_team];
+  if (numericAway > numericHome) return [match.away_team];
+
+  return teams;
+}
+
+function getQualifiedSelectionError(match, homeScore, awayScore, qualifiedTeam) {
+  if (match.stage === "GROUP") return "";
+
+  if (!qualifiedTeam) {
+    return "Selecione quem avancou no mata-mata.";
+  }
+
+  const allowedTeams = getAllowedQualifiedTeams(match, homeScore, awayScore);
+  if (!allowedTeams.includes(qualifiedTeam)) {
+    return `Pelo placar informado, o classificado precisa ser ${allowedTeams[0]}.`;
+  }
+
+  return "";
 }
 
 function getMatchGroup(match) {
@@ -1481,10 +1516,24 @@ function MatchCard({ match, onSave }) {
     setQualifiedTeam(match.prediction?.qualified_team ?? "");
   }, [match.prediction?.home_score, match.prediction?.away_score, match.prediction?.qualified_team]);
 
+  const allowedQualifiedTeams = getAllowedQualifiedTeams(match, homeScore, awayScore);
+
+  useEffect(() => {
+    if (match.stage !== "GROUP" && qualifiedTeam && !allowedQualifiedTeams.includes(qualifiedTeam)) {
+      setQualifiedTeam("");
+    }
+  }, [allowedQualifiedTeams, match.stage, qualifiedTeam]);
+
   async function handleSubmit(event) {
     event.preventDefault();
     if (match.locked) {
       emitToast("error", "Prazo encerrado: este palpite fechou 5 minutos antes do jogo.");
+      return;
+    }
+
+    const qualifiedError = getQualifiedSelectionError(match, homeScore, awayScore, qualifiedTeam);
+    if (qualifiedError) {
+      emitToast("error", qualifiedError);
       return;
     }
 
@@ -1558,8 +1607,8 @@ function MatchCard({ match, onSave }) {
             Classificado
             <select value={qualifiedTeam} onChange={(event) => setQualifiedTeam(event.target.value)} disabled={match.locked}>
               <option value="">Selecione quem avancou</option>
-              <option value={match.home_team}>{match.home_team}</option>
-              <option value={match.away_team}>{match.away_team}</option>
+              <option value={match.home_team} disabled={!allowedQualifiedTeams.includes(match.home_team)}>{match.home_team}</option>
+              <option value={match.away_team} disabled={!allowedQualifiedTeams.includes(match.away_team)}>{match.away_team}</option>
             </select>
           </label>
         )}
@@ -1864,9 +1913,23 @@ function PredictionTableRow({ match, onSave, compactDate = false }) {
     setQualifiedTeam(match.prediction?.qualified_team ?? "");
   }, [match.prediction?.home_score, match.prediction?.away_score, match.prediction?.qualified_team]);
 
+  const allowedQualifiedTeams = getAllowedQualifiedTeams(match, homeScore, awayScore);
+
+  useEffect(() => {
+    if (match.stage !== "GROUP" && qualifiedTeam && !allowedQualifiedTeams.includes(qualifiedTeam)) {
+      setQualifiedTeam("");
+    }
+  }, [allowedQualifiedTeams, match.stage, qualifiedTeam]);
+
   async function save() {
     if (match.locked) {
       emitToast("error", "Prazo encerrado: este palpite fechou 5 minutos antes do jogo.");
+      return;
+    }
+
+    const qualifiedError = getQualifiedSelectionError(match, homeScore, awayScore, qualifiedTeam);
+    if (qualifiedError) {
+      emitToast("error", qualifiedError);
       return;
     }
 
@@ -1893,8 +1956,8 @@ function PredictionTableRow({ match, onSave, compactDate = false }) {
             {match.stage !== "GROUP" && (
               <select value={qualifiedTeam} disabled={match.locked} onChange={(event) => setQualifiedTeam(event.target.value)}>
                 <option value="">Classificado</option>
-                <option value={match.home_team}>{match.home_team}</option>
-                <option value={match.away_team}>{match.away_team}</option>
+                <option value={match.home_team} disabled={!allowedQualifiedTeams.includes(match.home_team)}>{match.home_team}</option>
+                <option value={match.away_team} disabled={!allowedQualifiedTeams.includes(match.away_team)}>{match.away_team}</option>
               </select>
             )}
             <button type="button" onClick={save} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</button>
@@ -1957,7 +2020,21 @@ function ResultTableRow({ match, onSave, onReset, compactDate = false }) {
     setQualifiedTeam(match.qualified_team ?? "");
   }, [match.home_score, match.away_score, match.qualified_team]);
 
+  const allowedQualifiedTeams = getAllowedQualifiedTeams(match, homeScore, awayScore);
+
+  useEffect(() => {
+    if (isKnockout && qualifiedTeam && !allowedQualifiedTeams.includes(qualifiedTeam)) {
+      setQualifiedTeam("");
+    }
+  }, [allowedQualifiedTeams, isKnockout, qualifiedTeam]);
+
   async function save() {
+    const qualifiedError = getQualifiedSelectionError(match, homeScore, awayScore, qualifiedTeam);
+    if (qualifiedError) {
+      emitToast("error", qualifiedError);
+      return;
+    }
+
     setSaving(true);
     try {
       await onSave(match.id, { homeScore, awayScore, qualifiedTeam: isKnockout ? qualifiedTeam : "", status: "FINISHED" });
@@ -1980,8 +2057,8 @@ function ResultTableRow({ match, onSave, onReset, compactDate = false }) {
           {isKnockout && (
             <select value={qualifiedTeam} onChange={(event) => setQualifiedTeam(event.target.value)}>
               <option value="">Classificado</option>
-              <option value={match.home_team}>{match.home_team}</option>
-              <option value={match.away_team}>{match.away_team}</option>
+              <option value={match.home_team} disabled={!allowedQualifiedTeams.includes(match.home_team)}>{match.home_team}</option>
+              <option value={match.away_team} disabled={!allowedQualifiedTeams.includes(match.away_team)}>{match.away_team}</option>
             </select>
           )}
           <button type="button" onClick={save} disabled={saving}>{saving ? "..." : "Salvar"}</button>
@@ -2455,7 +2532,21 @@ function ResultEditor({ match, onSave, onReset }) {
     setQualifiedTeam(match.qualified_team ?? "");
   }, [match.home_score, match.away_score, match.qualified_team]);
 
+  const allowedQualifiedTeams = getAllowedQualifiedTeams(match, homeScore, awayScore);
+
+  useEffect(() => {
+    if (isKnockout && qualifiedTeam && !allowedQualifiedTeams.includes(qualifiedTeam)) {
+      setQualifiedTeam("");
+    }
+  }, [allowedQualifiedTeams, isKnockout, qualifiedTeam]);
+
   async function handleSave() {
+    const qualifiedError = getQualifiedSelectionError(match, homeScore, awayScore, qualifiedTeam);
+    if (qualifiedError) {
+      emitToast("error", qualifiedError);
+      return;
+    }
+
     setSaving(true);
     try {
       await onSave(match.id, {
@@ -2520,8 +2611,8 @@ function ResultEditor({ match, onSave, onReset }) {
             Quem avancou
             <select value={qualifiedTeam} onChange={(event) => setQualifiedTeam(event.target.value)}>
               <option value="">Selecione</option>
-              <option value={match.home_team}>{match.home_team}</option>
-              <option value={match.away_team}>{match.away_team}</option>
+              <option value={match.home_team} disabled={!allowedQualifiedTeams.includes(match.home_team)}>{match.home_team}</option>
+              <option value={match.away_team} disabled={!allowedQualifiedTeams.includes(match.away_team)}>{match.away_team}</option>
             </select>
           </label>
         )}

@@ -51,10 +51,21 @@ export function calculateMatchPoints(match, prediction) {
     match.qualified_team &&
     prediction.qualified_team === match.qualified_team;
 
-  if (exactScore && qualifiedCorrect) return 8;
-  if (sameOutcome) return 4;
-  if (qualifiedCorrect) return 2;
-  return 0;
+  let points = 0;
+
+  if (exactScore) {
+    points += 6;
+  } else if (sameOutcome && hasWinnerGoalsCorrect(match, prediction, actualOutcome)) {
+    points += 4;
+  } else if (sameOutcome) {
+    points += 2;
+  }
+
+  if (qualifiedCorrect) {
+    points += 2;
+  }
+
+  return points;
 }
 
 function normalizeText(value) {

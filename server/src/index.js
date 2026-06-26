@@ -71,6 +71,34 @@ function formatMatchForUser(match, userId) {
   };
 }
 
+function getQualifiedTeamError(match, homeScore, awayScore, qualifiedTeam) {
+  if (match.stage === "GROUP") return null;
+
+  const selectedTeam = String(qualifiedTeam || "").trim();
+  if (!selectedTeam) {
+    return "Informe quem avancou no mata-mata.";
+  }
+
+  if (![match.home_team, match.away_team].includes(selectedTeam)) {
+    return "Classificado invalido para este confronto.";
+  }
+
+  const numericHome = Number(homeScore);
+  const numericAway = Number(awayScore);
+
+  if (Number.isNaN(numericHome) || Number.isNaN(numericAway)) return null;
+
+  if (numericHome > numericAway && selectedTeam !== match.home_team) {
+    return `Pelo placar informado, o classificado precisa ser ${match.home_team}.`;
+  }
+
+  if (numericAway > numericHome && selectedTeam !== match.away_team) {
+    return `Pelo placar informado, o classificado precisa ser ${match.away_team}.`;
+  }
+
+  return null;
+}
+
 function visibleMatchesWhereClause() {
   return getPhase2Enabled() ? "1 = 1" : "stage = 'GROUP'";
 }
@@ -690,9 +718,11 @@ app.post("/api/predictions", requireAuth, (req, res) => {
     return res.status(400).json({ message: "Placar invalido." });
   }
 
-  if (match.stage !== "GROUP" && !qualifiedTeam) {
-    return res.status(400).json({ message: "Informe a selecao classificada." });
+  const qualifiedTeamError = getQualifiedTeamError(match, numericHome, numericAway, qualifiedTeam);
+  if (qualifiedTeamError) {
+    return res.status(400).json({ message: qualifiedTeamError });
   }
+  const selectedQualifiedTeam = match.stage === "GROUP" ? null : String(qualifiedTeam).trim();
 
   const previousPrediction = db
     .prepare(
@@ -706,7 +736,7 @@ app.post("/api/predictions", requireAuth, (req, res) => {
   const nextPrediction = {
     homeScore: numericHome,
     awayScore: numericAway,
-    qualifiedTeam: match.stage === "GROUP" ? null : qualifiedTeam,
+    qualifiedTeam: selectedQualifiedTeam,
     match: `${match.home_team} x ${match.away_team}`,
     stage: match.stage,
     roundName: match.round_name
@@ -723,7 +753,7 @@ app.post("/api/predictions", requireAuth, (req, res) => {
       qualified_team = excluded.qualified_team,
       updated_at = CURRENT_TIMESTAMP
   `
-  ).run(req.user.sub, matchId, numericHome, numericAway, match.stage === "GROUP" ? null : qualifiedTeam);
+  ).run(req.user.sub, matchId, numericHome, numericAway, selectedQualifiedTeam);
 
   writeAuditLog({
     eventType: "MATCH_PREDICTION",
@@ -1322,9 +1352,18 @@ app.put("/api/admin/matches/:id/result", requireAuth, requireAdmin, (req, res) =
     return res.status(400).json({ message: "Informe o placar das duas selecoes." });
   }
 
-  if (match.stage !== "GROUP" && !qualifiedTeam) {
-    return res.status(400).json({ message: "Informe quem avancou no mata-mata." });
+  const numericHome = Number(homeScore);
+  const numericAway = Number(awayScore);
+
+  if (Number.isNaN(numericHome) || Number.isNaN(numericAway) || numericHome < 0 || numericAway < 0) {
+    return res.status(400).json({ message: "Placar invalido." });
   }
+
+  const qualifiedTeamError = getQualifiedTeamError(match, numericHome, numericAway, qualifiedTeam);
+  if (qualifiedTeamError) {
+    return res.status(400).json({ message: qualifiedTeamError });
+  }
+  const selectedQualifiedTeam = match.stage === "GROUP" ? null : String(qualifiedTeam).trim();
 
   const previousResult = {
     homeScore: match.home_score,
@@ -1336,9 +1375,9 @@ app.put("/api/admin/matches/:id/result", requireAuth, requireAdmin, (req, res) =
     roundName: match.round_name
   };
   const nextResult = {
-    homeScore: homeScore ?? null,
-    awayScore: awayScore ?? null,
-    qualifiedTeam: qualifiedTeam || null,
+    homeScore: numericHome,
+    awayScore: numericAway,
+    qualifiedTeam: selectedQualifiedTeam,
     status: status || "FINISHED",
     match: `${match.home_team} x ${match.away_team}`,
     stage: match.stage,
@@ -1352,9 +1391,9 @@ app.put("/api/admin/matches/:id/result", requireAuth, requireAdmin, (req, res) =
     WHERE id = ?
   `
   ).run(
-    homeScore ?? null,
-    awayScore ?? null,
-    qualifiedTeam || null,
+    numericHome,
+    numericAway,
+    selectedQualifiedTeam,
     status || "FINISHED",
     req.params.id
   );
