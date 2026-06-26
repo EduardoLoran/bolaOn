@@ -210,6 +210,13 @@ function getDateKey(value) {
   }).format(date);
 }
 
+function normalizeKickoffAt(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
+}
+
 function getTeamGroupName(teamName) {
   const row = db.prepare("SELECT group_name FROM teams WHERE name = ?").get(teamName);
   return row?.group_name || null;
@@ -546,11 +553,11 @@ app.get("/api/participants/:id/public", requireAuth, (req, res) => {
     `
     )
     .get(participant.id) || {
-      champion: "",
-      runnerUp: "",
-      topScorer: "",
-      surpriseTeam: ""
-    };
+    champion: "",
+    runnerUp: "",
+    topScorer: "",
+    surpriseTeam: ""
+  };
 
   return res.json({
     participant,
@@ -795,10 +802,10 @@ app.get("/api/bonus-predictions", requireAuth, (req, res) => {
     .get(req.user.sub);
 
   const emptyBonus = {
-      champion: "",
-      runnerUp: "",
-      topScorer: "",
-      surpriseTeam: ""
+    champion: "",
+    runnerUp: "",
+    topScorer: "",
+    surpriseTeam: ""
   };
 
   return res.json({
@@ -1195,10 +1202,15 @@ app.put("/api/admin/maintenance-settings", requireAuth, requireAdmin, (req, res)
 });
 
 app.post("/api/admin/knockout-matches", requireAuth, requireAdmin, (req, res) => {
-  const { stage, homeTeam, awayTeam } = req.body;
+  const { stage, homeTeam, awayTeam, kickoffAt } = req.body;
 
   if (!stage || !homeTeam?.trim() || !awayTeam?.trim()) {
     return res.status(400).json({ message: "Informe fase, selecao da casa e selecao visitante." });
+  }
+
+  const normalizedKickoffAt = normalizeKickoffAt(kickoffAt);
+  if (!normalizedKickoffAt) {
+    return res.status(400).json({ message: "Informe uma data e hora validas para o confronto." });
   }
 
   if (homeTeam.trim() === awayTeam.trim()) {
@@ -1216,14 +1228,6 @@ app.post("/api/admin/knockout-matches", requireAuth, requireAdmin, (req, res) =>
 
   const count = db.prepare("SELECT COUNT(*) AS count FROM matches WHERE stage = ?").get(stage).count;
   const roundName = `${knockoutStageLabel(stage)} - Jogo ${count + 1}`;
-  const defaultKickoff = {
-    ROUND_OF_32: "2026-06-28T18:00:00Z",
-    ROUND_OF_16: "2026-07-04T18:00:00Z",
-    QUARTER: "2026-07-09T18:00:00Z",
-    SEMI: "2026-07-14T19:00:00Z",
-    THIRD_PLACE: "2026-07-18T19:00:00Z",
-    FINAL: "2026-07-19T19:00:00Z"
-  }[stage];
 
   const result = db
     .prepare(
@@ -1232,7 +1236,7 @@ app.post("/api/admin/knockout-matches", requireAuth, requireAdmin, (req, res) =>
       VALUES (?, ?, ?, ?, ?, 'SCHEDULED')
     `
     )
-    .run(stage, roundName, homeTeam.trim(), awayTeam.trim(), defaultKickoff);
+    .run(stage, roundName, homeTeam.trim(), awayTeam.trim(), normalizedKickoffAt);
 
   return res.status(201).json(
     db.prepare("SELECT id, stage, round_name, home_team, away_team, kickoff_at, status FROM matches WHERE id = ?").get(result.lastInsertRowid)
@@ -1240,7 +1244,7 @@ app.post("/api/admin/knockout-matches", requireAuth, requireAdmin, (req, res) =>
 });
 
 app.put("/api/admin/knockout-matches/:id", requireAuth, requireAdmin, (req, res) => {
-  const { homeTeam, awayTeam, stage } = req.body;
+  const { homeTeam, awayTeam, stage, kickoffAt } = req.body;
   const match = db.prepare("SELECT * FROM matches WHERE id = ?").get(req.params.id);
 
   if (!match || match.stage === "GROUP") {
@@ -1249,6 +1253,11 @@ app.put("/api/admin/knockout-matches/:id", requireAuth, requireAdmin, (req, res)
 
   if (!stage || !homeTeam?.trim() || !awayTeam?.trim()) {
     return res.status(400).json({ message: "Informe fase, selecao da casa e selecao visitante." });
+  }
+
+  const normalizedKickoffAt = normalizeKickoffAt(kickoffAt);
+  if (!normalizedKickoffAt) {
+    return res.status(400).json({ message: "Informe uma data e hora validas para o confronto." });
   }
 
   if (homeTeam.trim() === awayTeam.trim()) {
@@ -1271,10 +1280,10 @@ app.put("/api/admin/knockout-matches/:id", requireAuth, requireAdmin, (req, res)
   db.prepare(
     `
     UPDATE matches
-    SET stage = ?, round_name = ?, home_team = ?, away_team = ?
+    SET stage = ?, round_name = ?, home_team = ?, away_team = ?, kickoff_at = ?
     WHERE id = ?
   `
-  ).run(stage, roundName, homeTeam.trim(), awayTeam.trim(), req.params.id);
+  ).run(stage, roundName, homeTeam.trim(), awayTeam.trim(), normalizedKickoffAt, req.params.id);
 
   return res.json(
     db.prepare("SELECT id, stage, round_name, home_team, away_team, kickoff_at, status FROM matches WHERE id = ?").get(req.params.id)
@@ -1412,5 +1421,5 @@ app.get("*", (_req, res) => {
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`bolaOn rodando em http://192.168.3.235:${PORT}`);
+  console.log(`bolaOn rodando em http://localhost:${PORT}`);
 });

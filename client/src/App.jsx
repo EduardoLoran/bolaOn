@@ -244,6 +244,21 @@ function getTodayDateKey() {
   }).format(new Date());
 }
 
+function getDateKeyFromDate(date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "America/Sao_Paulo"
+  }).format(date);
+}
+
+function getYesterdayDateKey() {
+  const todayAtNoon = new Date(`${getTodayDateKey()}T12:00:00-03:00`);
+  todayAtNoon.setUTCDate(todayAtNoon.getUTCDate() - 1);
+  return getDateKeyFromDate(todayAtNoon);
+}
+
 function getPreferredDateKey(dates) {
   if (!dates.length) return "";
 
@@ -251,6 +266,46 @@ function getPreferredDateKey(dates) {
   if (dates.includes(today)) return today;
 
   return dates.find((date) => date >= today) || dates[dates.length - 1] || "";
+}
+
+function getDashboardDateKey(dates) {
+  if (!dates.length) return "";
+
+  const yesterday = getYesterdayDateKey();
+  if (dates.includes(yesterday)) return yesterday;
+
+  const pastDate = dates.filter((date) => date !== "Sem data" && date <= yesterday).at(-1);
+  return pastDate || getPreferredDateKey(dates);
+}
+
+const defaultKnockoutKickoffs = {
+  ROUND_OF_32: "2026-06-28T18:00:00Z",
+  ROUND_OF_16: "2026-07-04T18:00:00Z",
+  QUARTER: "2026-07-09T18:00:00Z",
+  SEMI: "2026-07-14T19:00:00Z",
+  THIRD_PLACE: "2026-07-18T19:00:00Z",
+  FINAL: "2026-07-19T19:00:00Z"
+};
+
+function getDefaultKnockoutForm(stage = "ROUND_OF_32") {
+  const kickoffAt = defaultKnockoutKickoffs[stage] || defaultKnockoutKickoffs.ROUND_OF_32;
+
+  return {
+    stage,
+    homeTeam: "",
+    awayTeam: "",
+    kickoffDate: getDateKey(kickoffAt),
+    kickoffTime: formatTime(kickoffAt)
+  };
+}
+
+function buildKickoffAt(kickoffDate, kickoffTime) {
+  if (!kickoffDate || !kickoffTime) return null;
+
+  const date = new Date(`${kickoffDate}T${kickoffTime}:00-03:00`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
 }
 
 function getMatchGroup(match) {
@@ -693,20 +748,28 @@ function DashboardGames({ matches }) {
   const filteredMatches = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
-    return [...matches]
-      .sort((a, b) => new Date(a.kickoff_at) - new Date(b.kickoff_at))
+    return sortMatchesByKickoff(matches)
       .filter((match) => {
         if (!normalizedSearch) return true;
         return `${match.home_team} ${match.away_team} ${match.round_name}`.toLowerCase().includes(normalizedSearch);
       });
   }, [matches, search]);
+  const preferredPage = useMemo(() => {
+    if (search.trim()) return 0;
+
+    const dates = [...new Set(filteredMatches.map((match) => getDateKey(match.kickoff_at)).filter(Boolean))];
+    const preferredDate = getDashboardDateKey(dates);
+    const preferredIndex = filteredMatches.findIndex((match) => getDateKey(match.kickoff_at) === preferredDate);
+
+    return preferredIndex >= 0 ? Math.floor(preferredIndex / pageSize) : 0;
+  }, [filteredMatches, search]);
   const totalPages = Math.max(Math.ceil(filteredMatches.length / pageSize), 1);
   const safePage = Math.min(page, totalPages - 1);
   const visible = filteredMatches.slice(safePage * pageSize, safePage * pageSize + pageSize);
 
   useEffect(() => {
-    setPage(0);
-  }, [search]);
+    setPage(preferredPage);
+  }, [preferredPage]);
 
   return (
     <div className="panel stack">
@@ -939,52 +1002,54 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
       <div className="panel-header">
         <h2>Ranking</h2>
       </div>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Participante</th>
-            <th>Pontos</th>
-            <th>Bonus</th>
-            <th>Placares exatos</th>
-            {participantViewsEnabled && (
-              <>
-                <th>Figurinha</th>
-                <th>Palpites</th>
-              </>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {ranking.map((row) => (
-            <tr key={row.userId}>
-              <td>
-                <span className={`podium-icon position-${row.position}`}>
-                  {podiumIcon[row.position] || row.position}
-                </span>
-              </td>
-              <td>{row.displayName || row.name}</td>
-              <td>{row.totalPoints}</td>
-              <td>{row.bonusPoints || 0}</td>
-              <td>{row.exactScores}</td>
+      <div className="ranking-table-wrap">
+        <table className="table ranking-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Participante</th>
+              <th>Pontos</th>
+              <th>Bonus</th>
+              <th>Placares exatos</th>
               {participantViewsEnabled && (
                 <>
-                  <td>
-                    <button className="secondary-button compact-button" type="button" onClick={() => openParticipantModal(row, "sticker")} disabled={loadingParticipantId === row.userId}>
-                      {loadingParticipantId === row.userId && loadingType === "sticker" ? "Abrindo..." : "Ver figurinha"}
-                    </button>
-                  </td>
-                  <td>
-                    <button className="secondary-button compact-button" type="button" onClick={() => openParticipantModal(row, "predictions")} disabled={loadingParticipantId === row.userId}>
-                      {loadingParticipantId === row.userId && loadingType === "predictions" ? "Abrindo..." : "Ver palpites"}
-                    </button>
-                  </td>
+                  <th>Figurinha</th>
+                  <th>Palpites</th>
                 </>
               )}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {ranking.map((row) => (
+              <tr key={row.userId}>
+                <td>
+                  <span className={`podium-icon position-${row.position}`}>
+                    {podiumIcon[row.position] || row.position}
+                  </span>
+                </td>
+                <td>{row.displayName || row.name}</td>
+                <td>{row.totalPoints}</td>
+                <td>{row.bonusPoints || 0}</td>
+                <td>{row.exactScores}</td>
+                {participantViewsEnabled && (
+                  <>
+                    <td>
+                      <button className="secondary-button compact-button" type="button" onClick={() => openParticipantModal(row, "sticker")} disabled={loadingParticipantId === row.userId}>
+                        {loadingParticipantId === row.userId && loadingType === "sticker" ? "Abrindo..." : "Ver figurinha"}
+                      </button>
+                    </td>
+                    <td>
+                      <button className="secondary-button compact-button" type="button" onClick={() => openParticipantModal(row, "predictions")} disabled={loadingParticipantId === row.userId}>
+                        {loadingParticipantId === row.userId && loadingType === "predictions" ? "Abrindo..." : "Ver palpites"}
+                      </button>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {modal?.type === "sticker" && (
         <ParticipantStickerModal participant={modal.participant} onClose={() => setModal(null)} />
       )}
@@ -2281,13 +2346,29 @@ function KnockoutMatchEditor({ match, teams, onSave, onDelete }) {
   const [stage, setStage] = useState(match.stage);
   const [homeTeam, setHomeTeam] = useState(match.home_team);
   const [awayTeam, setAwayTeam] = useState(match.away_team);
+  const [kickoffDate, setKickoffDate] = useState(getDateKey(match.kickoff_at));
+  const [kickoffTime, setKickoffTime] = useState(formatTime(match.kickoff_at));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  useEffect(() => {
+    setStage(match.stage);
+    setHomeTeam(match.home_team);
+    setAwayTeam(match.away_team);
+    setKickoffDate(getDateKey(match.kickoff_at));
+    setKickoffTime(formatTime(match.kickoff_at));
+  }, [match.stage, match.home_team, match.away_team, match.kickoff_at]);
+
   async function handleSave() {
+    const kickoffAt = buildKickoffAt(kickoffDate, kickoffTime);
+    if (!kickoffAt) {
+      emitToast("error", "Informe data e hora validas para o confronto.");
+      return;
+    }
+
     setSaving(true);
     try {
-      await onSave(match.id, { stage, homeTeam, awayTeam });
+      await onSave(match.id, { stage, homeTeam, awayTeam, kickoffAt });
     } catch {
       // O toast de erro ja e emitido pelo fluxo principal de salvamento.
     } finally {
@@ -2312,7 +2393,10 @@ function KnockoutMatchEditor({ match, teams, onSave, onDelete }) {
   return (
     <div className="mini-item">
       <div className="panel-header">
-        <h3>{match.round_name}</h3>
+        <div>
+          <h3>{match.round_name}</h3>
+          <small className="hint-text">{formatDate(match.kickoff_at)}</small>
+        </div>
         <span className="match-stage">{knockoutStageLabel(match.stage)}</span>
       </div>
 
@@ -2328,6 +2412,16 @@ function KnockoutMatchEditor({ match, teams, onSave, onDelete }) {
             <option value="FINAL">Final</option>
           </select>
         </label>
+        <div className="admin-datetime-row">
+          <label>
+            Data
+            <input type="date" value={kickoffDate} onChange={(event) => setKickoffDate(event.target.value)} />
+          </label>
+          <label>
+            Hora de Brasilia
+            <input type="time" value={kickoffTime} onChange={(event) => setKickoffTime(event.target.value)} />
+          </label>
+        </div>
         <div className="admin-team-row">
           <TeamPicker label="Selecao 1" value={homeTeam} onChange={setHomeTeam} teams={teams} />
           <TeamPicker label="Selecao 2" value={awayTeam} onChange={setAwayTeam} teams={teams} />
@@ -3232,7 +3326,12 @@ function AdminKnockoutTab({
               Fase
               <select
                 value={form.stage}
-                onChange={(event) => onFormChange({ ...form, stage: event.target.value })}
+                onChange={(event) => onFormChange({
+                  ...form,
+                  ...getDefaultKnockoutForm(event.target.value),
+                  homeTeam: form.homeTeam,
+                  awayTeam: form.awayTeam
+                })}
               >
                 <option value="ROUND_OF_32">16-avos</option>
                 <option value="ROUND_OF_16">Oitavas</option>
@@ -3242,6 +3341,24 @@ function AdminKnockoutTab({
                 <option value="FINAL">Final</option>
               </select>
             </label>
+            <div className="admin-datetime-row">
+              <label>
+                Data
+                <input
+                  type="date"
+                  value={form.kickoffDate}
+                  onChange={(event) => onFormChange({ ...form, kickoffDate: event.target.value })}
+                />
+              </label>
+              <label>
+                Hora de Brasilia
+                <input
+                  type="time"
+                  value={form.kickoffTime}
+                  onChange={(event) => onFormChange({ ...form, kickoffTime: event.target.value })}
+                />
+              </label>
+            </div>
             <div className="admin-team-row">
               <TeamPicker
                 label="Selecao 1"
@@ -3362,11 +3479,7 @@ export default function App() {
   const [phase2Enabled, setPhase2Enabled] = useState(false);
   const [participantViewsEnabled, setParticipantViewsEnabled] = useState(false);
   const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
-  const [knockoutForm, setKnockoutForm] = useState({
-    stage: "ROUND_OF_32",
-    homeTeam: "",
-    awayTeam: ""
-  });
+  const [knockoutForm, setKnockoutForm] = useState(() => getDefaultKnockoutForm());
   const [savingKnockoutMatch, setSavingKnockoutMatch] = useState(false);
   const [savingAdminBonus, setSavingAdminBonus] = useState(false);
   const [resettingAdminBonus, setResettingAdminBonus] = useState(false);
@@ -3538,17 +3651,19 @@ export default function App() {
   }
 
   async function handleCreateKnockoutMatch() {
+    const kickoffAt = buildKickoffAt(knockoutForm.kickoffDate, knockoutForm.kickoffTime);
+    if (!kickoffAt) {
+      emitToast("error", "Informe data e hora validas para o confronto.");
+      return;
+    }
+
     setSavingKnockoutMatch(true);
     try {
       await request("/admin/knockout-matches", {
         method: "POST",
-        body: JSON.stringify(knockoutForm)
+        body: JSON.stringify({ ...knockoutForm, kickoffAt })
       });
-      setKnockoutForm({
-        stage: "ROUND_OF_32",
-        homeTeam: "",
-        awayTeam: ""
-      });
+      setKnockoutForm(getDefaultKnockoutForm());
       emitToast("success", "Confronto cadastrado com sucesso.");
       await loadApp();
     } catch (err) {

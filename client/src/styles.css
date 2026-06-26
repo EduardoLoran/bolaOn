@@ -14,6 +14,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background: transparent;
 }
 
@@ -643,8 +644,13 @@ select {
 
 .dashboard-layout {
   display: grid;
-  grid-template-columns: 1.35fr 0.95fr;
+  grid-template-columns: minmax(0, 1.45fr) minmax(420px, 0.95fr);
   gap: 16px;
+  min-width: 0;
+}
+
+.dashboard-layout > * {
+  min-width: 0;
 }
 
 .admin-layout {
@@ -705,6 +711,12 @@ select {
 .admin-team-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.admin-datetime-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.7fr);
   gap: 16px;
 }
 
@@ -1284,6 +1296,8 @@ select {
 
 .panel {
   padding: 22px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .panel.stack {
@@ -1315,6 +1329,55 @@ select {
   padding: 12px 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   text-align: left;
+}
+
+.ranking-table-wrap {
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+.ranking-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.ranking-table th,
+.ranking-table td {
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ranking-table th:nth-child(1),
+.ranking-table td:nth-child(1) {
+  width: 56px;
+}
+
+.ranking-table th:nth-child(3),
+.ranking-table td:nth-child(3),
+.ranking-table th:nth-child(4),
+.ranking-table td:nth-child(4) {
+  width: 86px;
+}
+
+.ranking-table th:nth-child(5),
+.ranking-table td:nth-child(5) {
+  width: 118px;
+}
+
+.ranking-table th:nth-child(6),
+.ranking-table td:nth-child(6),
+.ranking-table th:nth-child(7),
+.ranking-table td:nth-child(7) {
+  width: 108px;
+}
+
+.ranking-table .compact-button {
+  min-width: 82px;
+  padding: 8px 10px;
+  line-height: 1.15;
 }
 
 .groups-layout {
@@ -1470,9 +1533,11 @@ select {
 .mini-list {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .scroll-list {
+  min-width: 0;
   max-height: none;
   overflow: visible;
   padding-right: 0;
@@ -1480,14 +1545,16 @@ select {
 
 .games-toolbar {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 10px;
   margin-bottom: 12px;
+  min-width: 0;
 }
 
 .games-toolbar input {
-  min-height: 44px;
-  padding: 10px 12px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid rgba(125, 211, 252, 0.18);
   background: rgba(8, 18, 38, 0.82);
@@ -1501,7 +1568,7 @@ select {
 }
 
 .pager-actions button {
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 12px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
@@ -1516,10 +1583,42 @@ select {
 }
 
 .pager-actions span {
+  min-width: 42px;
   color: #93c5fd;
-  font-weight: 800;
-  min-width: 48px;
+  font-weight: 900;
   text-align: center;
+}
+
+.dashboard-date-tabs {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.dashboard-date-tabs button {
+  flex: 0 0 auto;
+  min-width: 68px;
+  min-height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dashboard-date-tabs button.active {
+  border-color: rgba(96, 165, 250, 0.65);
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
 }
 
 .mini-item {
@@ -1532,7 +1631,10 @@ select {
 
 .dashboard-game-item {
   display: block;
-  padding: 10px 12px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 12px;
+  overflow: hidden;
   border-radius: 13px;
   border: 1px solid rgba(148, 163, 184, 0.08);
   background:
@@ -1547,17 +1649,18 @@ select {
 
 .dashboard-game-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 216px;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .dashboard-game-scoreline {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 62px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dashboard-team {
@@ -1565,7 +1668,9 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-weight: 800;
+  font-weight: 900;
+  font-size: 0.86rem;
+  line-height: 1.1;
 }
 
 .dashboard-team strong {
@@ -1583,13 +1688,14 @@ select {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-width: 70px;
+  min-width: 62px;
   color: #f8fafc;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .dashboard-score strong {
-  font-size: 1.28rem;
+  font-size: 1.17rem;
 }
 
 .dashboard-score span {
@@ -1597,12 +1703,12 @@ select {
 }
 
 .dashboard-game-meta {
-  min-width: 210px;
+  min-width: 0;
   display: grid;
-  grid-template-columns: minmax(76px, auto) auto auto;
+  grid-template-columns: 82px 44px 74px;
   align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
+  justify-items: end;
+  gap: 8px;
   color: #cbd5e1;
   justify-self: end;
 }
@@ -1612,13 +1718,14 @@ select {
   display: grid;
   gap: 2px;
   text-align: right;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
+  line-height: 1.1;
 }
 
 .dashboard-game-time {
-  min-width: 48px;
+  min-width: 44px;
   color: #f8fafc;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .dashboard-game-meta small {
@@ -1629,10 +1736,11 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 26px;
-  padding: 3px 9px;
+  min-height: 24px;
+  min-width: 72px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -3169,6 +3277,20 @@ select {
   font-size: 2rem;
 }
 
+@media (max-width: 1180px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ranking-table {
+    table-layout: auto;
+  }
+
+  .ranking-table-wrap {
+    overflow-x: auto;
+  }
+}
+
 @media (max-width: 900px) {
   .app-frame {
     grid-template-columns: 1fr;
@@ -3216,7 +3338,8 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .admin-team-row {
+  .admin-team-row,
+  .admin-datetime-row {
     grid-template-columns: 1fr;
   }
 
@@ -3260,12 +3383,34 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .ranking-table-wrap {
+    overflow-x: auto;
+  }
+
+  .ranking-table {
+    min-width: 640px;
+    table-layout: auto;
+  }
+
+  .dashboard-game-main {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-game-scoreline {
     grid-template-columns: 1fr;
   }
 
   .dashboard-score {
     justify-content: flex-start;
+  }
+
+  .dashboard-game-meta {
+    justify-items: start;
+  }
+
+  .dashboard-game-stage,
+  .dashboard-game-time {
+    text-align: left;
   }
 
   .group-select {
