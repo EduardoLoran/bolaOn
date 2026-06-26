@@ -1329,8 +1329,29 @@ app.delete("/api/admin/knockout-matches/:id", requireAuth, requireAdmin, (req, r
 
   db.exec("BEGIN");
   try {
+    const previousData = {
+      matchId: match.id,
+      stage: match.stage,
+      roundName: match.round_name,
+      match: `${match.home_team} x ${match.away_team}`,
+      kickoffAt: match.kickoff_at,
+      homeScore: match.home_score,
+      awayScore: match.away_score,
+      qualifiedTeam: match.qualified_team,
+      status: match.status
+    };
+
+    // Mantem o historico, mas remove a referencia para permitir apagar o jogo.
+    db.prepare("UPDATE audit_logs SET match_id = NULL WHERE match_id = ?").run(req.params.id);
     db.prepare("DELETE FROM predictions WHERE match_id = ?").run(req.params.id);
     db.prepare("DELETE FROM matches WHERE id = ?").run(req.params.id);
+    writeAuditLog({
+      eventType: "KNOCKOUT_MATCH",
+      action: "DELETE",
+      userId: req.user.sub,
+      previousData,
+      nextData: null
+    });
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");

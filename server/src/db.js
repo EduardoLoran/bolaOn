@@ -180,6 +180,7 @@ const fixtureSetting = db.prepare("SELECT value FROM app_settings WHERE key = ?"
 
 if (fixtureSetting?.value !== fixturesVersion) {
   const groupMatchIds = db.prepare("SELECT id FROM matches WHERE stage = 'GROUP'").all();
+  const detachAuditLogs = db.prepare("UPDATE audit_logs SET match_id = NULL WHERE match_id = ?");
   const deletePredictions = db.prepare("DELETE FROM predictions WHERE match_id = ?");
   const insertMatch = db.prepare(`
     INSERT INTO matches (
@@ -192,6 +193,7 @@ if (fixtureSetting?.value !== fixturesVersion) {
   db.exec("BEGIN");
   try {
     for (const match of groupMatchIds) {
+      detachAuditLogs.run(match.id);
       deletePredictions.run(match.id);
     }
     db.prepare("DELETE FROM matches WHERE stage = 'GROUP'").run();

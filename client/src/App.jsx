@@ -2800,6 +2800,7 @@ function auditTypeLabel(eventType) {
       MATCH_PREDICTION: "Palpite de jogo",
       BONUS_PREDICTION: "Palpite bonus",
       MATCH_RESULT: "Resultado do jogo",
+      KNOCKOUT_MATCH: "Confronto do mata-mata",
       BONUS_RESULT: "Resultado bonus",
       USER: "Usuario",
       SETTING: "Configuracao"
@@ -2869,6 +2870,7 @@ function AuditHistory({ logs }) {
           <option value="MATCH_PREDICTION">Palpite de jogo</option>
           <option value="BONUS_PREDICTION">Palpite bonus</option>
           <option value="MATCH_RESULT">Resultado do jogo</option>
+          <option value="KNOCKOUT_MATCH">Confronto do mata-mata</option>
           <option value="BONUS_RESULT">Resultado bonus</option>
         </select>
         <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
@@ -2876,6 +2878,7 @@ function AuditHistory({ logs }) {
           <option value="CREATE">Criado</option>
           <option value="UPDATE">Editado</option>
           <option value="RESET">Zerado</option>
+          <option value="DELETE">Excluido</option>
         </select>
       </div>
 
