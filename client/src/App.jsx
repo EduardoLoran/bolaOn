@@ -559,6 +559,113 @@ function ChevronIcon() {
   );
 }
 
+function NavIcon({ type }) {
+  const icons = {
+    dashboard: (
+      <>
+        <rect x="4" y="4" width="7" height="7" rx="2" />
+        <rect x="13" y="4" width="7" height="7" rx="2" />
+        <rect x="4" y="13" width="7" height="7" rx="2" />
+        <path d="M14 16h5M16.5 13.5v5" />
+      </>
+    ),
+    matches: (
+      <>
+        <circle cx="12" cy="12" r="8" />
+        <path d="m12 4 2.5 4.4 4.9 1M12 4 9.5 8.4l-4.9 1M4.5 9.5 8 13l-1 5M19.5 9.5 16 13l1 5M8 13h8" />
+      </>
+    ),
+    groups: (
+      <>
+        <circle cx="8" cy="8" r="3" />
+        <circle cx="16" cy="8" r="3" />
+        <circle cx="12" cy="16" r="3" />
+        <path d="M10.4 9.7 11.5 14M13.6 9.7 12.5 14" />
+      </>
+    ),
+    bonus: (
+      <path d="m12 3 2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.4 6.7 19.1l1-5.8-4.2-4.1 5.9-.9L12 3Z" />
+    ),
+    scores: (
+      <>
+        <rect x="5" y="5" width="14" height="14" rx="3" />
+        <path d="M8.5 9h7M8.5 12h7M8.5 15h4" />
+      </>
+    ),
+    rules: (
+      <>
+        <path d="M7 4h7l3 3v13H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+        <path d="M14 4v4h4M8.5 11h7M8.5 14h7M8.5 17h4" />
+      </>
+    ),
+    results: (
+      <>
+        <rect x="4" y="5" width="16" height="14" rx="3" />
+        <path d="M8 10h3M13 10h3M8 14h8" />
+      </>
+    ),
+    knockout: (
+      <>
+        <path d="M6 20V4M7 5h10l-2 4 2 4H7" />
+        <path d="M10 16h8" />
+      </>
+    ),
+    users: (
+      <>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M4 19a5 5 0 0 1 10 0" />
+        <path d="M15 8.5a2.5 2.5 0 0 1 0 5M17 19a4 4 0 0 0-3-3.8" />
+      </>
+    ),
+    history: (
+      <>
+        <path d="M5 12a7 7 0 1 0 2-4.9" />
+        <path d="M5 5v4h4M12 8v4l3 2" />
+      </>
+    )
+  };
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {icons[type] || icons.dashboard}
+    </svg>
+  );
+}
+
+function RankBadge({ position, fallback = position }) {
+  const rank = Number(position);
+  const icons = {
+    1: (
+      <>
+        <path d="M8 4h8v3.5a4 4 0 0 1-8 0V4Z" />
+        <path d="M8 6H5.5a2.5 2.5 0 0 0 2.5 4M16 6h2.5a2.5 2.5 0 0 1-2.5 4M12 11.5V15M9 19h6M10 15h4v4h-4z" />
+      </>
+    ),
+    2: (
+      <>
+        <circle cx="12" cy="10" r="4" />
+        <path d="M9 14.5 7.5 20l4.5-2 4.5 2-1.5-5.5M9.5 4 12 7l2.5-3" />
+      </>
+    ),
+    3: (
+      <>
+        <path d="M12 4 14 8l4.4.6-3.2 3.1.8 4.4L12 14l-4 2.1.8-4.4-3.2-3.1L10 8l2-4Z" />
+        <path d="M9 20h6" />
+      </>
+    )
+  };
+
+  return (
+    <span className={`podium-icon position-${rank || "default"}`}>
+      {icons[rank] ? (
+        <svg viewBox="0 0 24 24" aria-hidden="true">{icons[rank]}</svg>
+      ) : (
+        fallback || "#"
+      )}
+    </span>
+  );
+}
+
 function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -772,16 +879,19 @@ function PasswordChangeModal({ forced = false, onSave, onClose, onLogout }) {
 function DashboardCards({ dashboard }) {
   return (
     <section className="stats-grid">
-      <article className="stat-card">
-        <span>Participantes</span>
+      <article className="stat-card stat-card-participants">
+        <span className="stat-icon"><NavIcon type="users" /></span>
+        <span className="stat-label">Participantes</span>
         <strong>{dashboard.summary.totalParticipants}</strong>
       </article>
-      <article className="stat-card">
-        <span>Jogos da fase</span>
+      <article className="stat-card stat-card-matches">
+        <span className="stat-icon"><NavIcon type="matches" /></span>
+        <span className="stat-label">Jogos da fase</span>
         <strong>{dashboard.summary.totalMatches}</strong>
       </article>
-      <article className="stat-card">
-        <span>Jogos finalizados</span>
+      <article className="stat-card stat-card-finished">
+        <span className="stat-icon"><NavIcon type="scores" /></span>
+        <span className="stat-label">Jogos finalizados</span>
         <strong>{dashboard.summary.completedMatches}</strong>
       </article>
     </section>
@@ -1046,7 +1156,7 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
   }
 
   return (
-    <div className="panel">
+    <div className="panel ranking-panel">
       <div className="panel-header">
         <h2>Ranking</h2>
       </div>
@@ -1071,9 +1181,7 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
             {ranking.map((row) => (
               <tr key={row.userId}>
                 <td>
-                  <span className={`podium-icon position-${row.position}`}>
-                    {podiumIcon[row.position] || row.position}
-                  </span>
+                  <RankBadge position={row.position} />
                 </td>
                 <td>{row.displayName || row.name}</td>
                 <td>{row.totalPoints}</td>
@@ -3277,20 +3385,20 @@ function ProfileView({ user, ranking, onSave, onChangePassword }) {
 }
 
 const navItems = [
-  { key: "dashboard", label: "Visao geral", icon: "▦" },
-  { key: "matches", label: "Jogos e palpites", icon: "⚽" },
-  { key: "groups", label: "Grupos", icon: "▦" },
-  { key: "bonus", label: "Bonus", icon: "☆" },
-  { key: "scores", label: "Pontuacao", icon: "P" },
-  { key: "rules", label: "Regras", icon: "▤" }
+  { key: "dashboard", label: "Visao geral", shortLabel: "Inicio", icon: "dashboard" },
+  { key: "matches", label: "Jogos e palpites", shortLabel: "Jogos", icon: "matches" },
+  { key: "groups", label: "Grupos", shortLabel: "Grupo", icon: "groups" },
+  { key: "bonus", label: "Bonus", shortLabel: "Bonus", icon: "bonus" },
+  { key: "scores", label: "Pontuacao", shortLabel: "Pts", icon: "scores" },
+  { key: "rules", label: "Regras", shortLabel: "Regras", icon: "rules" }
 ];
 
 const adminNavItems = [
-  { key: "admin-results", label: "Resultados", icon: "▣" },
-  { key: "admin-phase2", label: "Cadastro Mata-mata", icon: "⚑" },
-  { key: "admin-bonus", label: "Bonus", icon: "☆" },
-  { key: "admin-users", label: "Usuarios", icon: "U" },
-  { key: "admin-history", label: "Historico", icon: "▤" }
+  { key: "admin-results", label: "Resultados", shortLabel: "Result.", icon: "results" },
+  { key: "admin-phase2", label: "Cadastro Mata-mata", shortLabel: "Mata", icon: "knockout" },
+  { key: "admin-bonus", label: "Bonus", shortLabel: "Bonus", icon: "bonus" },
+  { key: "admin-users", label: "Usuarios", shortLabel: "Users", icon: "users" },
+  { key: "admin-history", label: "Historico", shortLabel: "Hist.", icon: "history" }
 ];
 
 const pageInfo = {
@@ -3353,8 +3461,9 @@ function Sidebar({ activeTab, onTabChange, matches, isAdmin }) {
       <nav className="side-nav">
         {items.map((item) => (
           <button key={item.key} className={activeTab === item.key ? "active" : ""} type="button" onClick={() => onTabChange(item.key)}>
-            <span>{item.icon}</span>
-            {item.label}
+            <span className="nav-icon"><NavIcon type={item.icon} /></span>
+            <span className="nav-label nav-label-full">{item.label}</span>
+            <span className="nav-label nav-label-short">{item.shortLabel || item.label}</span>
           </button>
         ))}
       </nav>
@@ -3368,7 +3477,7 @@ function TopPosition({ standing }) {
 
   return (
     <div className={`top-position position-${position || "default"}`}>
-      <span>{podiumIcon[position] || "#"}</span>
+      <RankBadge position={position} fallback="#" />
       <strong>{position ? `${position}º` : "-"}</strong>
       <small>Sua posicao</small>
     </div>
