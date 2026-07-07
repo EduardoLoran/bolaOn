@@ -485,9 +485,7 @@ app.get("/api/ranking", requireAuth, (_req, res) => {
 });
 
 app.get("/api/participants/:id/public", requireAuth, (req, res) => {
-  const isAdmin = Boolean(req.user.isAdmin);
-
-  if (!getParticipantViewsEnabled() && !isAdmin) {
+  if (!getParticipantViewsEnabled()) {
     return res.status(403).json({ message: "Visualizacao dos participantes desativada pelo administrador." });
   }
 
@@ -625,7 +623,8 @@ app.get("/api/matches", requireAuth, (req, res) => {
   return res.json(matches);
 });
 
-app.get("/api/scoreboard", requireAuth, (_req, res) => {
+app.get("/api/scoreboard", requireAuth, (req, res) => {
+  const participantViewsEnabled = getParticipantViewsEnabled();
   const matches = db
     .prepare(
       `
@@ -661,10 +660,11 @@ app.get("/api/scoreboard", requireAuth, (_req, res) => {
       WHERE (${visibleMatchesWhereClause()})
         AND users.is_admin = 0
         AND users.is_active = 1
+        AND (? = 1 OR users.id = ?)
       ORDER BY matches.kickoff_at, matches.id, participantName
     `
     )
-    .all()
+    .all(participantViewsEnabled ? 1 : 0, req.user.sub)
     .map((row) => {
       const match = {
         stage: row.stage,

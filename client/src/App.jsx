@@ -1144,11 +1144,23 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
   const [loadingType, setLoadingType] = useState("");
 
   async function openParticipantModal(row, type) {
+    if (!participantViewsEnabled) {
+      setModal({ type: "predictions-disabled" });
+      return;
+    }
+
     setLoadingParticipantId(row.userId);
     setLoadingType(type);
     try {
       const data = await request(`/participants/${row.userId}/public`);
       setModal({ type, ...data });
+    } catch (err) {
+      if (err.status === 403) {
+        setModal({ type: "predictions-disabled" });
+        return;
+      }
+
+      emitToast("error", err.message || "Nao foi possivel abrir os dados do participante.");
     } finally {
       setLoadingParticipantId(null);
       setLoadingType("");
@@ -1169,12 +1181,8 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
               <th>Pontos</th>
               <th>Bonus</th>
               <th>Placares exatos</th>
-              {participantViewsEnabled && (
-                <>
-                  <th>Figurinha</th>
-                  <th>Palpites</th>
-                </>
-              )}
+              <th>Figurinha</th>
+              <th>Palpites</th>
             </tr>
           </thead>
           <tbody>
@@ -1187,20 +1195,16 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
                 <td>{row.totalPoints}</td>
                 <td>{row.bonusPoints || 0}</td>
                 <td>{row.exactScores}</td>
-                {participantViewsEnabled && (
-                  <>
-                    <td>
-                      <button className="secondary-button compact-button" type="button" onClick={() => openParticipantModal(row, "sticker")} disabled={loadingParticipantId === row.userId}>
-                        {loadingParticipantId === row.userId && loadingType === "sticker" ? "Abrindo..." : "Ver figurinha"}
-                      </button>
-                    </td>
-                    <td>
-                      <button className="secondary-button compact-button" type="button" onClick={() => openParticipantModal(row, "predictions")} disabled={loadingParticipantId === row.userId}>
-                        {loadingParticipantId === row.userId && loadingType === "predictions" ? "Abrindo..." : "Ver palpites"}
-                      </button>
-                    </td>
-                  </>
-                )}
+                <td>
+                  <button className="secondary-button compact-button" type="button" onClick={() => openParticipantModal(row, "sticker")} disabled={loadingParticipantId === row.userId}>
+                    {loadingParticipantId === row.userId && loadingType === "sticker" ? "Abrindo..." : "Ver figurinha"}
+                  </button>
+                </td>
+                <td>
+                  <button className="secondary-button compact-button" type="button" onClick={() => openParticipantModal(row, "predictions")} disabled={loadingParticipantId === row.userId}>
+                    {loadingParticipantId === row.userId && loadingType === "predictions" ? "Abrindo..." : "Ver palpites"}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1212,6 +1216,9 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
       {loadingParticipantId && !modal && (
         <ParticipantLoadingModal label={loadingType === "sticker" ? "Carregando figurinha" : "Carregando palpites"} />
       )}
+      {modal?.type === "predictions-disabled" && (
+        <PredictionDisabledModal onClose={() => setModal(null)} />
+      )}
       {modal?.type === "predictions" && (
         <ParticipantPredictionsModal
           participant={modal.participant}
@@ -1221,6 +1228,28 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
           onClose={() => setModal(null)}
         />
       )}
+    </div>
+  );
+}
+
+function PredictionDisabledModal({ onClose }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-card prediction-disabled-card">
+        <div className="modal-header">
+          <div>
+            <p className="eyebrow">Palpite desativado</p>
+            <h2>Visualizacao bloqueada</h2>
+            <p>Os palpites dos outros participantes estao desativados neste momento.</p>
+          </div>
+          <button className="modal-close" type="button" onClick={onClose} aria-label="Fechar modal">×</button>
+        </div>
+        <div className="prediction-disabled-body">
+          <span className="prediction-disabled-icon"><NavIcon type="rules" /></span>
+          <strong>Voce ainda pode acompanhar o ranking e editar os seus proprios palpites.</strong>
+          <small>Quando a visualizacao for liberada pela organizacao, esse acesso volta a funcionar automaticamente.</small>
+        </div>
+      </div>
     </div>
   );
 }

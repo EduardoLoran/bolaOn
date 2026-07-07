@@ -1213,6 +1213,52 @@ input {
   color: #cbd5e1;
 }
 
+.prediction-disabled-card {
+  max-width: 520px;
+}
+
+.prediction-disabled-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.18), transparent 42%),
+    rgba(15, 23, 42, 0.72);
+}
+
+.prediction-disabled-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.14);
+}
+
+.prediction-disabled-icon svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.prediction-disabled-body strong {
+  color: #f8fafc;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.prediction-disabled-body small {
+  color: #bfdbfe;
+  line-height: 1.5;
+}
+
 .prediction-group-block {
   display: grid;
   gap: 14px;
