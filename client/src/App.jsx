@@ -1605,9 +1605,10 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
     ...splitBracketMatches(grouped[stage.key] || [])
   }));
   const sideColumnCount = Math.max(sideData.length, 1);
-  const sideColumnWidth = sideColumnCount >= 4 ? 162 : sideColumnCount === 3 ? 172 : sideColumnCount === 2 ? 184 : 198;
-  const centerColumnWidth = sideColumnCount >= 4 ? 178 : sideColumnCount === 3 ? 188 : sideColumnCount === 2 ? 198 : 208;
-  const columnGap = sideColumnCount >= 4 ? 14 : 16;
+  const editingMatch = sortedMatches.find((match) => match.id === editingMatchId);
+  const sideColumnWidth = sideColumnCount >= 4 ? 136 : sideColumnCount === 3 ? 154 : sideColumnCount === 2 ? 168 : 180;
+  const centerColumnWidth = sideColumnCount >= 4 ? 154 : sideColumnCount === 3 ? 170 : sideColumnCount === 2 ? 184 : 194;
+  const columnGap = sideColumnCount >= 4 ? 10 : 14;
   const sideColumns = Array(sideColumnCount).fill(`${sideColumnWidth}px`).join(" ");
   const gridTemplateColumns = `${sideColumns} ${centerColumnWidth}px ${sideColumns}`;
   const minCanvasWidth = (sideColumnCount * 2 * sideColumnWidth) + centerColumnWidth + ((sideColumnCount * 2) * columnGap) + 36;
@@ -1658,7 +1659,7 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
                 onSelect={() => onStageSelect(knockoutStageLabel("FINAL"))}
                 onSave={saveHandler}
                 onReset={resetHandler}
-                isEditing={editingMatchId === finalMatch.id}
+                isSelected={editingMatchId === finalMatch.id}
                 onEditToggle={() => setEditingMatchId((current) => current === finalMatch.id ? null : finalMatch.id)}
               />
             ) : (
@@ -1677,7 +1678,7 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
                 onSelect={() => onStageSelect(knockoutStageLabel("THIRD_PLACE"))}
                 onSave={saveHandler}
                 onReset={resetHandler}
-                isEditing={editingMatchId === thirdPlaceMatch.id}
+                isSelected={editingMatchId === thirdPlaceMatch.id}
                 onEditToggle={() => setEditingMatchId((current) => current === thirdPlaceMatch.id ? null : thirdPlaceMatch.id)}
               />
             ) : (
@@ -1702,6 +1703,19 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
           ))}
         </div>
       </div>
+      {editingMatch && (
+        <div className="wc-selected-editor">
+          <div className="wc-selected-editor-head">
+            <div>
+              <span>{getMatchCode(editingMatch)}</span>
+              <strong><TeamName name={editingMatch.home_team} /> <b>x</b> <TeamName name={editingMatch.away_team} /></strong>
+              <small>{formatShortDate(editingMatch.kickoff_at)} | {formatTime(editingMatch.kickoff_at)}</small>
+            </div>
+            <button type="button" onClick={() => setEditingMatchId(null)}>Fechar</button>
+          </div>
+          <BracketMatchControls match={editingMatch} mode={mode} onSave={saveHandler} onReset={resetHandler} />
+        </div>
+      )}
     </section>
   );
 }
@@ -1728,7 +1742,7 @@ function BracketColumn({ side, stage, matches, mode, activeStage, onStageSelect,
             onSelect={() => onStageSelect(stageLabel)}
             onSave={onSave}
             onReset={onReset}
-            isEditing={editingMatchId === match.id}
+            isSelected={editingMatchId === match.id}
             onEditToggle={() => onEditMatch((current) => current === match.id ? null : match.id)}
           />
         ))}
@@ -1737,7 +1751,7 @@ function BracketColumn({ side, stage, matches, mode, activeStage, onStageSelect,
   );
 }
 
-function BracketMatchCard({ match, index = 0, mode, featured = false, onSelect, onSave, onReset, isEditing = false, onEditToggle }) {
+function BracketMatchCard({ match, index = 0, mode, featured = false, onSelect, onSave, onReset, isSelected = false, onEditToggle }) {
   const data = getBracketMatchData(match, mode);
   const homeAdvances = data.qualifier && data.qualifier === match.home_team;
   const awayAdvances = data.qualifier && data.qualifier === match.away_team;
@@ -1748,7 +1762,7 @@ function BracketMatchCard({ match, index = 0, mode, featured = false, onSelect, 
   const hasOfficialResult = match.home_score != null && match.away_score != null;
 
   return (
-    <article className={`wc-match ${featured ? "featured" : ""} ${match.locked ? "locked" : ""} ${isEditing ? "editing" : ""}`}>
+    <article className={`wc-match ${featured ? "featured" : ""} ${match.locked ? "locked" : ""} ${isSelected ? "selected" : ""}`}>
       <div className="wc-match-top">
         <button type="button" className="wc-match-stage-button" onClick={onSelect}>
           {getMatchCode(match, index)}
@@ -1765,11 +1779,11 @@ function BracketMatchCard({ match, index = 0, mode, featured = false, onSelect, 
         {mode !== "result" && hasOfficialResult && <small>Resultado: {match.home_score} x {match.away_score}</small>}
       </div>
       {canEdit && (
-        <button type="button" className="wc-edit-toggle" onClick={onEditToggle}>
-          {isEditing ? "Fechar" : editLabel}
+        <button type="button" className="wc-edit-toggle" onClick={onEditToggle} aria-pressed={isSelected}>
+          {isSelected ? "Selecionado" : editLabel}
         </button>
       )}
-      {(isEditing || mode === "publicPrediction") && (
+      {mode === "publicPrediction" && (
         <BracketMatchControls match={match} mode={mode} onSave={onSave} onReset={onReset} />
       )}
     </article>
