@@ -1537,6 +1537,257 @@ function buildBestThirds(predictionStandings) {
     .map((team) => `${team.group}:${team.name}`);
 }
 
+const bracketSideStages = [
+  { key: "ROUND_OF_32", label: "16-avos", className: "round-32" },
+  { key: "ROUND_OF_16", label: "Oitavas", className: "round-16" },
+  { key: "QUARTER", label: "Quartas", className: "quarter" },
+  { key: "SEMI", label: "Semi", className: "semi" }
+];
+
+function getMatchCode(match, index = 0) {
+  const source = match.round_name || "";
+  const matchNumber = source.match(/Jogo\s+(\d+)/i);
+  return matchNumber ? `J${matchNumber[1]}` : `J${index + 1}`;
+}
+
+function splitBracketMatches(matches) {
+  const middle = Math.ceil(matches.length / 2);
+  return {
+    left: matches.slice(0, middle),
+    right: matches.slice(middle)
+  };
+}
+
+function getBracketMatchData(match, mode) {
+  const usePrediction = mode === "prediction" || mode === "publicPrediction";
+  const source = usePrediction ? match.prediction : match;
+  const homeScore = source?.home_score ?? null;
+  const awayScore = source?.away_score ?? null;
+  const hasScore = homeScore != null && awayScore != null;
+  const qualifier = usePrediction ? getPredictedQualifier(match) : match.qualified_team;
+  const protectedPrediction = Boolean(match.predictionHidden);
+
+  return {
+    homeScore,
+    awayScore,
+    hasScore,
+    qualifier,
+    protectedPrediction,
+    status: protectedPrediction
+      ? "Protegido"
+      : hasScore
+        ? usePrediction ? "Palpite" : "Full time"
+        : "A definir"
+  };
+}
+
+function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave }) {
+  const sortedMatches = useMemo(() => sortMatchesByKickoff(matches), [matches]);
+  const grouped = useMemo(() => {
+    return sortedMatches.reduce((acc, match) => {
+      if (!acc[match.stage]) acc[match.stage] = [];
+      acc[match.stage].push(match);
+      return acc;
+    }, {});
+  }, [sortedMatches]);
+  const visibleStages = bracketSideStages.filter((stage) => grouped[stage.key]?.length);
+  const finalMatch = grouped.FINAL?.[0];
+  const thirdPlaceMatch = grouped.THIRD_PLACE?.[0];
+  const completed = sortedMatches.filter((match) => getBracketMatchData(match, mode).qualifier).length;
+  const saveHandler = mode === "result" ? onSave?.onSave : onSave;
+  const resetHandler = mode === "result" ? onSave?.onReset : undefined;
+
+  if (!sortedMatches.length) return null;
+
+  const sideData = visibleStages.map((stage) => ({
+    ...stage,
+    ...splitBracketMatches(grouped[stage.key] || [])
+  }));
+  const sideColumnCount = Math.max(sideData.length, 1);
+  const sideColumnWidth = sideColumnCount >= 4 ? 150 : sideColumnCount === 3 ? 164 : sideColumnCount === 2 ? 178 : 190;
+  const centerColumnWidth = sideColumnCount >= 4 ? 170 : sideColumnCount === 3 ? 180 : sideColumnCount === 2 ? 190 : 200;
+  const columnGap = sideColumnCount >= 4 ? 10 : 12;
+  const sideColumns = Array(sideColumnCount).fill(`${sideColumnWidth}px`).join(" ");
+  const gridTemplateColumns = `${sideColumns} ${centerColumnWidth}px ${sideColumns}`;
+  const minCanvasWidth = (sideColumnCount * 2 * sideColumnWidth) + centerColumnWidth + ((sideColumnCount * 2) * columnGap) + 36;
+
+  return (
+    <section className="wc-bracket-panel">
+      <div className="wc-bracket-heading">
+        <div>
+          <span className="eyebrow">Chaveamento</span>
+          <h2>Mata-mata</h2>
+          <p>Preencha direto na chave, das pontas ate as decisoes.</p>
+        </div>
+        <strong>{completed}/{sortedMatches.length} definidos</strong>
+      </div>
+
+      <div className="wc-bracket-scroll">
+        <div
+          className={`wc-bracket-canvas stages-${sideColumnCount}`}
+          style={{
+            gridTemplateColumns,
+            columnGap: `${columnGap}px`,
+            minWidth: `${minCanvasWidth}px`
+          }}
+        >
+          {sideData.map((stage) => (
+            <BracketColumn
+              key={`left-${stage.key}`}
+              side="left"
+              stage={stage}
+              matches={stage.left}
+              mode={mode}
+              activeStage={activeStage}
+              onStageSelect={onStageSelect}
+              onSave={saveHandler}
+              onReset={resetHandler}
+            />
+          ))}
+
+          <div className="wc-bracket-center">
+            <span className="wc-center-title">Final</span>
+            {finalMatch ? (
+              <BracketMatchCard
+                match={finalMatch}
+                mode={mode}
+                featured
+                onSelect={() => onStageSelect(knockoutStageLabel("FINAL"))}
+                onSave={saveHandler}
+                onReset={resetHandler}
+              />
+            ) : (
+              <BracketPlaceholder label="Final" />
+            )}
+            <div className="wc-center-cross">
+              <div />
+              <span>Campeao</span>
+              <div />
+            </div>
+            <span className="wc-center-title secondary">Disputa de 3o lugar</span>
+            {thirdPlaceMatch ? (
+              <BracketMatchCard
+                match={thirdPlaceMatch}
+                mode={mode}
+                onSelect={() => onStageSelect(knockoutStageLabel("THIRD_PLACE"))}
+                onSave={saveHandler}
+                onReset={resetHandler}
+              />
+            ) : (
+              <BracketPlaceholder label="3o lugar" />
+            )}
+          </div>
+
+          {[...sideData].reverse().map((stage) => (
+            <BracketColumn
+              key={`right-${stage.key}`}
+              side="right"
+              stage={stage}
+              matches={stage.right}
+              mode={mode}
+              activeStage={activeStage}
+              onStageSelect={onStageSelect}
+              onSave={saveHandler}
+              onReset={resetHandler}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BracketColumn({ side, stage, matches, mode, activeStage, onStageSelect, onSave, onReset }) {
+  const stageLabel = knockoutStageLabel(stage.key);
+
+  return (
+    <div className={`wc-bracket-column ${side} ${stage.className}`}>
+      <button
+        type="button"
+        className={`wc-stage-label ${activeStage === stageLabel ? "active" : ""}`}
+        onClick={() => onStageSelect(stageLabel)}
+      >
+        {stage.label}
+      </button>
+      <div className="wc-bracket-list">
+        {matches.map((match, index) => (
+          <BracketMatchCard
+            key={match.id}
+            match={match}
+            index={index}
+            mode={mode}
+            onSelect={() => onStageSelect(stageLabel)}
+            onSave={onSave}
+            onReset={onReset}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BracketMatchCard({ match, index = 0, mode, featured = false, onSelect, onSave, onReset }) {
+  const data = getBracketMatchData(match, mode);
+  const homeAdvances = data.qualifier && data.qualifier === match.home_team;
+  const awayAdvances = data.qualifier && data.qualifier === match.away_team;
+  const qualifierLabel = mode === "result" ? "Classificado" : "Avanca";
+  const statusClass = data.protectedPrediction ? "protected" : data.hasScore ? "done" : "pending";
+
+  return (
+    <article className={`wc-match ${featured ? "featured" : ""} ${match.locked ? "locked" : ""}`}>
+      <div className="wc-match-top">
+        <button type="button" className="wc-match-stage-button" onClick={onSelect}>
+          {getMatchCode(match, index)}
+        </button>
+        <small className={`wc-match-status ${statusClass}`}>{data.status}</small>
+      </div>
+      <div className="wc-match-teams">
+        <BracketTeamLine name={match.home_team} score={data.homeScore} advances={homeAdvances} />
+        <BracketTeamLine name={match.away_team} score={data.awayScore} advances={awayAdvances} />
+      </div>
+      <div className="wc-match-footer">
+        <span>{formatShortDate(match.kickoff_at)} | {formatTime(match.kickoff_at)}</span>
+        <strong>{data.qualifier ? `${qualifierLabel}: ${data.qualifier}` : data.protectedPrediction ? "Palpite protegido" : "Classificado: -"}</strong>
+      </div>
+      <BracketMatchControls match={match} mode={mode} onSave={onSave} onReset={onReset} />
+    </article>
+  );
+}
+
+function BracketTeamLine({ name, score, advances }) {
+  return (
+    <div className={`wc-team ${advances ? "winner" : ""}`}>
+      <TeamName name={name} />
+      <strong>{score != null ? score : "-"}</strong>
+    </div>
+  );
+}
+
+function BracketMatchControls({ match, mode, onSave, onReset }) {
+  if (mode === "prediction") {
+    return <PredictionControls match={match} onSave={onSave} variant="bracket" />;
+  }
+
+  if (mode === "publicPrediction") {
+    return <PublicPredictionSummary match={match} variant="bracket" />;
+  }
+
+  return <ResultControls match={match} onSave={onSave} onReset={onReset} variant="bracket" />;
+}
+
+function BracketPlaceholder({ label }) {
+  return (
+    <div className="wc-match placeholder">
+      <span className="wc-match-top">
+        <small>A definir</small>
+        <b>{label}</b>
+      </span>
+      <span className="wc-team empty"><span>Vencedor 1</span><strong>-</strong></span>
+      <span className="wc-team empty"><span>Vencedor 2</span><strong>-</strong></span>
+    </div>
+  );
+}
+
 function buildOfficialQualifiers(standings) {
   const bestThirdKeys = Object.values(standings)
     .map((rows) => rows[2])
@@ -1913,6 +2164,7 @@ function MatchesByGroupPanel({ title, matches, teams = [], onSave, mode }) {
   const groupMatches = matches.filter((match) => getMatchGroup(match) === activeGroup);
   const dates = useMemo(() => ["ALL", ...new Set(groupMatches.map((match) => getDateKey(match.kickoff_at)))], [groupMatches]);
   const [activeDate, setActiveDate] = useState("ALL");
+  const [knockoutViewMode, setKnockoutViewMode] = useState("bracket");
 
   useEffect(() => {
     if (!groups.includes(activeGroup)) setActiveGroup(groups[0] || "");
@@ -1925,7 +2177,8 @@ function MatchesByGroupPanel({ title, matches, teams = [], onSave, mode }) {
   const visibleMatches = activeDate === "ALL" ? groupMatches : groupMatches.filter((match) => getDateKey(match.kickoff_at) === activeDate);
   const savedCount = getSavedCount(groupMatches, mode);
   const progress = groupMatches.length ? Math.round((savedCount / groupMatches.length) * 100) : 0;
-  const showGroupTabs = groups.length > 1;
+  const showGroupTabs = groups.length > 1 && !isKnockoutPanel;
+  const isKnockoutBracketView = isKnockoutPanel && knockoutViewMode === "bracket";
   const predictionStandings = useMemo(() => buildPredictionStandings(teams, matches), [teams, matches]);
   const bestThirdKeys = useMemo(() => buildBestThirds(predictionStandings), [predictionStandings]);
   const groupProjection = !isKnockoutPanel
@@ -1940,15 +2193,6 @@ function MatchesByGroupPanel({ title, matches, teams = [], onSave, mode }) {
     })
     : [];
   const hasProjectedGroup = !isKnockoutPanel && groupMatches.some((match) => match.prediction);
-  const knockoutProjection = isKnockoutPanel ? groupMatches.map((match) => ({
-    id: match.id,
-    label: match.round_name || `${match.home_team} x ${match.away_team}`,
-    homeTeam: match.home_team,
-    awayTeam: match.away_team,
-    qualifier: getPredictedQualifier(match),
-    hasPrediction: Boolean(match.prediction)
-  })) : [];
-
   return (
     <div className="match-board panel">
       <label className="group-select">
@@ -1976,7 +2220,7 @@ function MatchesByGroupPanel({ title, matches, teams = [], onSave, mode }) {
           <span>{savedCount}/{groupMatches.length} preenchidos</span>
         </div>
         <div className="board-progress">
-          <span>Progresso por grupo</span>
+          <span>{isKnockoutPanel ? "Progresso da etapa" : "Progresso por grupo"}</span>
           <div><i style={{ width: `${progress}%` }} /></div>
           <strong>{progress}%</strong>
         </div>
@@ -2002,80 +2246,75 @@ function MatchesByGroupPanel({ title, matches, teams = [], onSave, mode }) {
           </div>
         </div>
       )}
-      {(mode === "prediction" || mode === "publicPrediction") && isKnockoutPanel && (
-        <div className="group-projection knockout-projection">
-          <div className="group-projection-header">
-            <div>
-              <strong>Projecao de {activeGroup}</strong>
-              <span>Quem avancaria nessa etapa conforme os palpites salvos.</span>
-            </div>
-            <small>{knockoutProjection.filter((item) => item.qualifier).length}/{knockoutProjection.length} definidos</small>
+      {isKnockoutPanel && (
+        <div className="knockout-view-switch">
+          <div>
+            <strong>{isKnockoutBracketView ? "Chaveamento visual" : "Tabela do mata-mata"}</strong>
+            <span>{isKnockoutBracketView ? "Edite palpites e resultados dentro dos jogos." : "Modo classico com filtros por etapa e data."}</span>
           </div>
-          <div className="knockout-projection-grid">
-            {knockoutProjection.map((item) => (
-              <div className={`projection-card ${item.qualifier ? "qualified" : "pending"}`} key={item.id}>
-                <span className="projection-position">{item.label}</span>
-                <div className="projection-matchup">
-                  <TeamName name={item.homeTeam} />
-                  <span>x</span>
-                  <TeamName name={item.awayTeam} />
-                </div>
-                {item.qualifier ? (
-                  <>
-                    <strong>{activeGroup === "Final" ? "Campeao" : "Avanca"}</strong>
-                    <TeamName name={item.qualifier} />
-                  </>
-                ) : (
-                  <>
-                    <strong>A definir</strong>
-                    <small>{item.hasPrediction ? "Escolha quem passa em caso de empate." : "Salve o palpite desse confronto."}</small>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => setKnockoutViewMode((current) => current === "bracket" ? "table" : "bracket")}
+          >
+            {isKnockoutBracketView ? "Trocar para tabela" : "Trocar para chaveamento visual"}
+          </button>
         </div>
       )}
-      <div className="date-tabs">
-        {dates.map((date) => (
-          <button key={date} type="button" className={date === activeDate ? "active" : ""} onClick={() => setActiveDate(date)}>
-            {date === "ALL" ? "Todas as datas" : formatShortDate(`${date}T12:00:00Z`)}
-          </button>
-        ))}
-      </div>
-      <div className="match-table-wrap">
-        <table className="match-table">
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Jogo</th>
-              <th>{mode === "result" ? "Resultado" : mode === "prediction" || mode === "publicPrediction" ? "Palpite / Resultado" : "Palpite"}</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleMatches.map((match) => (
-              mode === "prediction" ? (
-                <PredictionTableRow key={match.id} match={match} onSave={onSave} />
-              ) : mode === "publicPrediction" ? (
-                <PublicPredictionTableRow key={match.id} match={match} />
-              ) : (
-                <ResultTableRow key={match.id} match={match} onSave={onSave.onSave} onReset={onSave.onReset} />
-              )
+      {isKnockoutBracketView ? (
+        <KnockoutBracketView matches={matches} activeStage={activeGroup} onStageSelect={setActiveGroup} mode={mode} onSave={onSave} />
+      ) : (
+        <>
+          {isKnockoutPanel && (
+            <div className="knockout-detail-header">
+              <div>
+                <strong>Detalhes da etapa selecionada</strong>
+                <span>{activeGroup} | {visibleMatches.length} confronto(s)</span>
+              </div>
+              <small>A tabela continua disponivel como fallback operacional.</small>
+            </div>
+          )}
+          <div className="date-tabs">
+            {dates.map((date) => (
+              <button key={date} type="button" className={date === activeDate ? "active" : ""} onClick={() => setActiveDate(date)}>
+                {date === "ALL" ? "Todas as datas" : formatShortDate(`${date}T12:00:00Z`)}
+              </button>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+          <div className="match-table-wrap">
+            <table className="match-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Jogo</th>
+                  <th>{mode === "result" ? "Resultado" : mode === "prediction" || mode === "publicPrediction" ? "Palpite / Resultado" : "Palpite"}</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleMatches.map((match) => (
+                  mode === "prediction" ? (
+                    <PredictionTableRow key={match.id} match={match} onSave={onSave} />
+                  ) : mode === "publicPrediction" ? (
+                    <PublicPredictionTableRow key={match.id} match={match} />
+                  ) : (
+                    <ResultTableRow key={match.id} match={match} onSave={onSave.onSave} onReset={onSave.onReset} />
+                  )
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function PredictionTableRow({ match, onSave, compactDate = false }) {
+function PredictionControls({ match, onSave, variant = "table" }) {
   const [homeScore, setHomeScore] = useState(match.prediction?.home_score ?? "");
   const [awayScore, setAwayScore] = useState(match.prediction?.away_score ?? "");
   const [qualifiedTeam, setQualifiedTeam] = useState(match.prediction?.qualified_team ?? "");
   const [saving, setSaving] = useState(false);
-  const hasResult = match.home_score != null && match.away_score != null;
+  const isBracket = variant === "bracket";
 
   useEffect(() => {
     setHomeScore(match.prediction?.home_score ?? "");
@@ -2121,7 +2360,7 @@ function PredictionTableRow({ match, onSave, compactDate = false }) {
 
     setSaving(true);
     try {
-      await onSave({ matchId: match.id, homeScore, awayScore, qualifiedTeam: qualifiedTeamValue });
+      await onSave?.({ matchId: match.id, homeScore, awayScore, qualifiedTeam: qualifiedTeamValue });
     } catch {
       // O toast de erro ja e emitido pelo fluxo principal de salvamento.
     } finally {
@@ -2130,81 +2369,88 @@ function PredictionTableRow({ match, onSave, compactDate = false }) {
   }
 
   return (
-    <tr className={match.locked ? "locked-row" : ""}>
-      <td>{compactDate ? formatTime(match.kickoff_at) : formatShortDate(match.kickoff_at)}{!compactDate && <small>{formatTime(match.kickoff_at)}</small>}</td>
-      <td><TeamName name={match.home_team} /> <span className="versus">x</span> <TeamName name={match.away_team} /></td>
-      <td>
-        <div className="prediction-result-cell">
-          <div className={`inline-score ${match.locked ? "locked-fields" : ""}`}>
-            <input type="number" min="0" value={homeScore} disabled={match.locked} onChange={(event) => handleHomeScoreChange(event.target.value)} placeholder="Casa" />
-            <span>x</span>
-            <input type="number" min="0" value={awayScore} disabled={match.locked} onChange={(event) => handleAwayScoreChange(event.target.value)} placeholder="Fora" />
-            {match.stage !== "GROUP" && (
-              <select value={qualifiedTeamValue} disabled={match.locked} onChange={(event) => handleQualifiedTeamChange(event.target.value)}>
-                <option value="">Classificado</option>
-                {renderQualifiedTeamOptions(allowedQualifiedTeams)}
-              </select>
-            )}
-            <button type="button" onClick={save} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</button>
-          </div>
-          <div className={`public-official-result compact-result ${hasResult ? "" : "pending"}`}>
-            <span>Resultado</span>
-            <strong>{hasResult ? `${match.home_score} x ${match.away_score}` : "-"}</strong>
-            {match.stage !== "GROUP" && <small>Classificado: {match.qualified_team || "-"}</small>}
-          </div>
-        </div>
-      </td>
-      <td><span className={`status-dot ${match.locked ? "locked" : match.prediction ? "done" : "pending"}`}>{match.locked ? "Fechado" : match.prediction ? "OK" : "Pendente"}</span></td>
-    </tr>
+    <div className={`prediction-result-cell ${isBracket ? "bracket-control-block" : ""}`}>
+      <div className={`inline-score ${isBracket ? "bracket-score-editor" : ""} ${match.locked ? "locked-fields" : ""}`}>
+        <input
+          type="number"
+          min="0"
+          value={homeScore}
+          disabled={match.locked}
+          onChange={(event) => handleHomeScoreChange(event.target.value)}
+          placeholder="Casa"
+          aria-label={`Palpite ${match.home_team}`}
+        />
+        <span>x</span>
+        <input
+          type="number"
+          min="0"
+          value={awayScore}
+          disabled={match.locked}
+          onChange={(event) => handleAwayScoreChange(event.target.value)}
+          placeholder="Fora"
+          aria-label={`Palpite ${match.away_team}`}
+        />
+        {match.stage !== "GROUP" && (
+          <select value={qualifiedTeamValue} disabled={match.locked} onChange={(event) => handleQualifiedTeamChange(event.target.value)}>
+            <option value="">Classificado</option>
+            {renderQualifiedTeamOptions(allowedQualifiedTeams)}
+          </select>
+        )}
+        <button type="button" onClick={save} disabled={saving || (isBracket && match.locked)}>{saving ? "Salvando..." : "Salvar"}</button>
+      </div>
+      <OfficialResultSummary match={match} variant={variant} />
+    </div>
   );
 }
 
-function PublicPredictionTableRow({ match, compactDate = false }) {
-  const hasPrediction = Boolean(match.prediction);
+function OfficialResultSummary({ match, variant = "table" }) {
   const hasResult = match.home_score != null && match.away_score != null;
+
+  return (
+    <div className={`public-official-result compact-result ${variant === "bracket" ? "bracket-summary" : ""} ${hasResult ? "" : "pending"}`}>
+      <span>Resultado</span>
+      <strong>{hasResult ? `${match.home_score} x ${match.away_score}` : "-"}</strong>
+      {match.stage !== "GROUP" && <small>Classificado: {match.qualified_team || "-"}</small>}
+    </div>
+  );
+}
+
+function PublicPredictionSummary({ match, variant = "table" }) {
+  const hasPrediction = Boolean(match.prediction);
   const predictionHidden = Boolean(match.predictionHidden);
 
   return (
-    <tr>
-      <td>{compactDate ? formatTime(match.kickoff_at) : formatShortDate(match.kickoff_at)}{!compactDate && <small>{formatTime(match.kickoff_at)}</small>}</td>
-      <td><TeamName name={match.home_team} /> <span className="versus">x</span> <TeamName name={match.away_team} /></td>
-      <td>
-        <div className="public-prediction-result-cell">
-          {hasPrediction ? (
-            <div className="public-inline-prediction">
-              <span>Palpite</span>
-              <strong>{match.prediction.home_score} x {match.prediction.away_score}</strong>
-              {match.stage !== "GROUP" && <small>Classificado: {match.prediction.qualified_team || "-"}</small>}
-              <small>{match.points || 0} pts</small>
-            </div>
-          ) : predictionHidden ? (
-            <div className="public-inline-prediction prediction-hidden-box">
-              <span>Palpite protegido</span>
-              <strong>Liberado no inicio do jogo</strong>
-              <small>{match.predictionAvailableAt ? formatDate(match.predictionAvailableAt) : "Aguardando inicio"}</small>
-            </div>
-          ) : (
-            <span className="status-dot pending">Sem palpite</span>
-          )}
-          <div className={`public-official-result ${hasResult ? "" : "pending"}`}>
-            <span>Resultado</span>
-            <strong>{hasResult ? `${match.home_score} x ${match.away_score}` : "-"}</strong>
-            {match.stage !== "GROUP" && <small>Classificado: {match.qualified_team || "-"}</small>}
-          </div>
+    <div className={`public-prediction-result-cell ${variant === "bracket" ? "bracket-control-block" : ""}`}>
+      {hasPrediction ? (
+        <div className={`public-inline-prediction ${variant === "bracket" ? "bracket-summary" : ""}`}>
+          <span>Palpite</span>
+          <strong>{match.prediction.home_score} x {match.prediction.away_score}</strong>
+          {match.stage !== "GROUP" && <small>Classificado: {match.prediction.qualified_team || "-"}</small>}
+          <small>{match.points || 0} pts</small>
         </div>
-      </td>
-      <td><span className={`status-dot ${hasPrediction ? "done" : predictionHidden ? "locked" : "pending"}`}>{hasPrediction ? "Preenchido" : predictionHidden ? "Protegido" : "Pendente"}</span></td>
-    </tr>
+      ) : predictionHidden ? (
+        <div className={`public-inline-prediction prediction-hidden-box ${variant === "bracket" ? "bracket-summary" : ""}`}>
+          <span>Palpite protegido</span>
+          <strong>Liberado no inicio do jogo</strong>
+          <small>{match.predictionAvailableAt ? formatDate(match.predictionAvailableAt) : "Aguardando inicio"}</small>
+        </div>
+      ) : (
+        <span className="status-dot pending">Sem palpite</span>
+      )}
+      <OfficialResultSummary match={match} variant={variant} />
+    </div>
   );
 }
 
-function ResultTableRow({ match, onSave, onReset, compactDate = false }) {
+function ResultControls({ match, onSave, onReset, variant = "table" }) {
   const [homeScore, setHomeScore] = useState(match.home_score ?? "");
   const [awayScore, setAwayScore] = useState(match.away_score ?? "");
   const [qualifiedTeam, setQualifiedTeam] = useState(match.qualified_team ?? "");
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const isKnockout = match.stage !== "GROUP";
   const hasResult = match.home_score != null || match.away_score != null || match.qualified_team;
+  const isBracket = variant === "bracket";
 
   useEffect(() => {
     setHomeScore(match.home_score ?? "");
@@ -2245,7 +2491,7 @@ function ResultTableRow({ match, onSave, onReset, compactDate = false }) {
 
     setSaving(true);
     try {
-      await onSave(match.id, { homeScore, awayScore, qualifiedTeam: isKnockout ? qualifiedTeamValue : "", status: "FINISHED" });
+      await onSave?.(match.id, { homeScore, awayScore, qualifiedTeam: isKnockout ? qualifiedTeamValue : "", status: "FINISHED" });
     } catch {
       // O toast de erro ja e emitido pelo fluxo principal de salvamento.
     } finally {
@@ -2253,25 +2499,79 @@ function ResultTableRow({ match, onSave, onReset, compactDate = false }) {
     }
   }
 
+  async function reset() {
+    setResetting(true);
+    try {
+      await onReset?.(match.id);
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <div className={`inline-score ${isBracket ? "bracket-score-editor result-score-editor" : ""}`}>
+      <input
+        type="number"
+        min="0"
+        value={homeScore}
+        onChange={(event) => handleHomeScoreChange(event.target.value)}
+        placeholder="Casa"
+        aria-label={`Resultado ${match.home_team}`}
+      />
+      <span>x</span>
+      <input
+        type="number"
+        min="0"
+        value={awayScore}
+        onChange={(event) => handleAwayScoreChange(event.target.value)}
+        placeholder="Fora"
+        aria-label={`Resultado ${match.away_team}`}
+      />
+      {isKnockout && (
+        <select value={qualifiedTeamValue} onChange={(event) => handleQualifiedTeamChange(event.target.value)}>
+          <option value="">Classificado</option>
+          {renderQualifiedTeamOptions(allowedQualifiedTeams)}
+        </select>
+      )}
+      <button type="button" onClick={save} disabled={saving || !onSave}>{saving ? "..." : "Salvar"}</button>
+      <button className="mini-danger" type="button" onClick={reset} disabled={!hasResult || resetting || !onReset}>{resetting ? "..." : "Zerar"}</button>
+    </div>
+  );
+}
+
+function PredictionTableRow({ match, onSave, compactDate = false }) {
+  return (
+    <tr className={match.locked ? "locked-row" : ""}>
+      <td>{compactDate ? formatTime(match.kickoff_at) : formatShortDate(match.kickoff_at)}{!compactDate && <small>{formatTime(match.kickoff_at)}</small>}</td>
+      <td><TeamName name={match.home_team} /> <span className="versus">x</span> <TeamName name={match.away_team} /></td>
+      <td><PredictionControls match={match} onSave={onSave} /></td>
+      <td><span className={`status-dot ${match.locked ? "locked" : match.prediction ? "done" : "pending"}`}>{match.locked ? "Fechado" : match.prediction ? "OK" : "Pendente"}</span></td>
+    </tr>
+  );
+}
+
+function PublicPredictionTableRow({ match, compactDate = false }) {
+  const hasPrediction = Boolean(match.prediction);
+  const predictionHidden = Boolean(match.predictionHidden);
+
   return (
     <tr>
       <td>{compactDate ? formatTime(match.kickoff_at) : formatShortDate(match.kickoff_at)}{!compactDate && <small>{formatTime(match.kickoff_at)}</small>}</td>
       <td><TeamName name={match.home_team} /> <span className="versus">x</span> <TeamName name={match.away_team} /></td>
-      <td>
-        <div className="inline-score">
-          <input type="number" min="0" value={homeScore} onChange={(event) => handleHomeScoreChange(event.target.value)} placeholder="Casa" />
-          <span>x</span>
-          <input type="number" min="0" value={awayScore} onChange={(event) => handleAwayScoreChange(event.target.value)} placeholder="Fora" />
-          {isKnockout && (
-            <select value={qualifiedTeamValue} onChange={(event) => handleQualifiedTeamChange(event.target.value)}>
-              <option value="">Classificado</option>
-              {renderQualifiedTeamOptions(allowedQualifiedTeams)}
-            </select>
-          )}
-          <button type="button" onClick={save} disabled={saving}>{saving ? "..." : "Salvar"}</button>
-          <button className="mini-danger" type="button" onClick={() => onReset(match.id)} disabled={!hasResult}>Zerar</button>
-        </div>
-      </td>
+      <td><PublicPredictionSummary match={match} /></td>
+      <td><span className={`status-dot ${hasPrediction ? "done" : predictionHidden ? "locked" : "pending"}`}>{hasPrediction ? "Preenchido" : predictionHidden ? "Protegido" : "Pendente"}</span></td>
+    </tr>
+  );
+}
+
+function ResultTableRow({ match, onSave, onReset, compactDate = false }) {
+  const hasResult = match.home_score != null || match.away_score != null || match.qualified_team;
+
+  return (
+    <tr>
+      <td>{compactDate ? formatTime(match.kickoff_at) : formatShortDate(match.kickoff_at)}{!compactDate && <small>{formatTime(match.kickoff_at)}</small>}</td>
+      <td><TeamName name={match.home_team} /> <span className="versus">x</span> <TeamName name={match.away_team} /></td>
+      <td><ResultControls match={match} onSave={onSave} onReset={onReset} /></td>
       <td><span className={`status-dot ${hasResult ? "done" : "pending"}`}>{hasResult ? "Lancado" : "Pendente"}</span></td>
     </tr>
   );
