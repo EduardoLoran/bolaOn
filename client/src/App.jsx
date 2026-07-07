@@ -1582,6 +1582,7 @@ function getBracketMatchData(match, mode) {
 }
 
 function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave }) {
+  const [editingMatchId, setEditingMatchId] = useState(null);
   const sortedMatches = useMemo(() => sortMatchesByKickoff(matches), [matches]);
   const grouped = useMemo(() => {
     return sortedMatches.reduce((acc, match) => {
@@ -1604,9 +1605,9 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
     ...splitBracketMatches(grouped[stage.key] || [])
   }));
   const sideColumnCount = Math.max(sideData.length, 1);
-  const sideColumnWidth = sideColumnCount >= 4 ? 150 : sideColumnCount === 3 ? 164 : sideColumnCount === 2 ? 178 : 190;
-  const centerColumnWidth = sideColumnCount >= 4 ? 170 : sideColumnCount === 3 ? 180 : sideColumnCount === 2 ? 190 : 200;
-  const columnGap = sideColumnCount >= 4 ? 10 : 12;
+  const sideColumnWidth = sideColumnCount >= 4 ? 162 : sideColumnCount === 3 ? 172 : sideColumnCount === 2 ? 184 : 198;
+  const centerColumnWidth = sideColumnCount >= 4 ? 178 : sideColumnCount === 3 ? 188 : sideColumnCount === 2 ? 198 : 208;
+  const columnGap = sideColumnCount >= 4 ? 14 : 16;
   const sideColumns = Array(sideColumnCount).fill(`${sideColumnWidth}px`).join(" ");
   const gridTemplateColumns = `${sideColumns} ${centerColumnWidth}px ${sideColumns}`;
   const minCanvasWidth = (sideColumnCount * 2 * sideColumnWidth) + centerColumnWidth + ((sideColumnCount * 2) * columnGap) + 36;
@@ -1642,6 +1643,8 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
               onStageSelect={onStageSelect}
               onSave={saveHandler}
               onReset={resetHandler}
+              editingMatchId={editingMatchId}
+              onEditMatch={setEditingMatchId}
             />
           ))}
 
@@ -1655,6 +1658,8 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
                 onSelect={() => onStageSelect(knockoutStageLabel("FINAL"))}
                 onSave={saveHandler}
                 onReset={resetHandler}
+                isEditing={editingMatchId === finalMatch.id}
+                onEditToggle={() => setEditingMatchId((current) => current === finalMatch.id ? null : finalMatch.id)}
               />
             ) : (
               <BracketPlaceholder label="Final" />
@@ -1672,6 +1677,8 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
                 onSelect={() => onStageSelect(knockoutStageLabel("THIRD_PLACE"))}
                 onSave={saveHandler}
                 onReset={resetHandler}
+                isEditing={editingMatchId === thirdPlaceMatch.id}
+                onEditToggle={() => setEditingMatchId((current) => current === thirdPlaceMatch.id ? null : thirdPlaceMatch.id)}
               />
             ) : (
               <BracketPlaceholder label="3o lugar" />
@@ -1689,6 +1696,8 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
               onStageSelect={onStageSelect}
               onSave={saveHandler}
               onReset={resetHandler}
+              editingMatchId={editingMatchId}
+              onEditMatch={setEditingMatchId}
             />
           ))}
         </div>
@@ -1697,7 +1706,7 @@ function KnockoutBracketView({ matches, activeStage, onStageSelect, mode, onSave
   );
 }
 
-function BracketColumn({ side, stage, matches, mode, activeStage, onStageSelect, onSave, onReset }) {
+function BracketColumn({ side, stage, matches, mode, activeStage, onStageSelect, onSave, onReset, editingMatchId, onEditMatch }) {
   const stageLabel = knockoutStageLabel(stage.key);
 
   return (
@@ -1719,6 +1728,8 @@ function BracketColumn({ side, stage, matches, mode, activeStage, onStageSelect,
             onSelect={() => onStageSelect(stageLabel)}
             onSave={onSave}
             onReset={onReset}
+            isEditing={editingMatchId === match.id}
+            onEditToggle={() => onEditMatch((current) => current === match.id ? null : match.id)}
           />
         ))}
       </div>
@@ -1726,15 +1737,18 @@ function BracketColumn({ side, stage, matches, mode, activeStage, onStageSelect,
   );
 }
 
-function BracketMatchCard({ match, index = 0, mode, featured = false, onSelect, onSave, onReset }) {
+function BracketMatchCard({ match, index = 0, mode, featured = false, onSelect, onSave, onReset, isEditing = false, onEditToggle }) {
   const data = getBracketMatchData(match, mode);
   const homeAdvances = data.qualifier && data.qualifier === match.home_team;
   const awayAdvances = data.qualifier && data.qualifier === match.away_team;
   const qualifierLabel = mode === "result" ? "Classificado" : "Avanca";
   const statusClass = data.protectedPrediction ? "protected" : data.hasScore ? "done" : "pending";
+  const canEdit = mode === "prediction" || mode === "result";
+  const editLabel = mode === "result" ? "Resultado" : match.prediction ? "Editar" : "Palpite";
+  const hasOfficialResult = match.home_score != null && match.away_score != null;
 
   return (
-    <article className={`wc-match ${featured ? "featured" : ""} ${match.locked ? "locked" : ""}`}>
+    <article className={`wc-match ${featured ? "featured" : ""} ${match.locked ? "locked" : ""} ${isEditing ? "editing" : ""}`}>
       <div className="wc-match-top">
         <button type="button" className="wc-match-stage-button" onClick={onSelect}>
           {getMatchCode(match, index)}
@@ -1748,8 +1762,16 @@ function BracketMatchCard({ match, index = 0, mode, featured = false, onSelect, 
       <div className="wc-match-footer">
         <span>{formatShortDate(match.kickoff_at)} | {formatTime(match.kickoff_at)}</span>
         <strong>{data.qualifier ? `${qualifierLabel}: ${data.qualifier}` : data.protectedPrediction ? "Palpite protegido" : "Classificado: -"}</strong>
+        {mode !== "result" && hasOfficialResult && <small>Resultado: {match.home_score} x {match.away_score}</small>}
       </div>
-      <BracketMatchControls match={match} mode={mode} onSave={onSave} onReset={onReset} />
+      {canEdit && (
+        <button type="button" className="wc-edit-toggle" onClick={onEditToggle}>
+          {isEditing ? "Fechar" : editLabel}
+        </button>
+      )}
+      {(isEditing || mode === "publicPrediction") && (
+        <BracketMatchControls match={match} mode={mode} onSave={onSave} onReset={onReset} />
+      )}
     </article>
   );
 }
