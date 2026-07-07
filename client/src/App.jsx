@@ -1144,11 +1144,6 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
   const [loadingType, setLoadingType] = useState("");
 
   async function openParticipantModal(row, type) {
-    if (!participantViewsEnabled) {
-      setModal({ type: "predictions-disabled" });
-      return;
-    }
-
     setLoadingParticipantId(row.userId);
     setLoadingType(type);
     try {
@@ -1224,6 +1219,7 @@ function RankingTable({ ranking, participantViewsEnabled, teams }) {
           participant={modal.participant}
           predictions={modal.predictions}
           bonusPrediction={modal.bonusPrediction}
+          bonusPredictionHidden={modal.bonusPredictionHidden}
           teams={teams}
           onClose={() => setModal(null)}
         />
@@ -1301,9 +1297,10 @@ function ParticipantLoadingModal({ label }) {
   );
 }
 
-function ParticipantPredictionsModal({ participant, predictions, bonusPrediction, teams, onClose }) {
+function ParticipantPredictionsModal({ participant, predictions, bonusPrediction, bonusPredictionHidden, teams, onClose }) {
   const normalizedPredictions = useMemo(() => predictions.map(normalizePublicPredictionMatch), [predictions]);
   const filledCount = normalizedPredictions.filter((match) => match.prediction).length;
+  const hiddenCount = normalizedPredictions.filter((match) => match.predictionHidden).length;
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -1321,7 +1318,7 @@ function ParticipantPredictionsModal({ participant, predictions, bonusPrediction
           <div>
             <p className="eyebrow">Palpites</p>
             <h2>{participant.displayName || participant.name}</h2>
-            <p>{filledCount}/{normalizedPredictions.length} palpites preenchidos.</p>
+            <p>{filledCount}/{normalizedPredictions.length} palpites visiveis{hiddenCount ? ` | ${hiddenCount} liberam no inicio do jogo` : ""}.</p>
           </div>
           <button className="modal-close" type="button" onClick={onClose} aria-label="Fechar modal">×</button>
         </div>
@@ -1329,10 +1326,16 @@ function ParticipantPredictionsModal({ participant, predictions, bonusPrediction
         <div className="participant-fullscreen-body">
           <div className="bonus-public-box">
             <strong>Bonus</strong>
-            <span>Campeao: {bonusPrediction.champion || "-"}</span>
-            <span>Vice: {bonusPrediction.runnerUp || "-"}</span>
-            <span>Artilheiro: {bonusPrediction.topScorer || "-"}</span>
-            <span>Terceiro lugar: {bonusPrediction.surpriseTeam || "-"}</span>
+            {bonusPredictionHidden ? (
+              <span className="prediction-hidden-note">Liberado apos o inicio da competicao.</span>
+            ) : (
+              <>
+                <span>Campeao: {bonusPrediction.champion || "-"}</span>
+                <span>Vice: {bonusPrediction.runnerUp || "-"}</span>
+                <span>Artilheiro: {bonusPrediction.topScorer || "-"}</span>
+                <span>Terceiro lugar: {bonusPrediction.surpriseTeam || "-"}</span>
+              </>
+            )}
           </div>
 
           <div className="participant-predictions-wrap">
@@ -1370,6 +1373,8 @@ function normalizePublicPredictionMatch(match) {
     away_score: match.away_score ?? match.officialAwayScore ?? null,
     qualified_team: match.qualified_team ?? match.officialQualifiedTeam ?? null,
     prediction,
+    predictionHidden: Boolean(match.predictionHidden),
+    predictionAvailableAt: match.predictionAvailableAt || "",
     points: match.points || 0
   };
 }
@@ -2157,6 +2162,7 @@ function PredictionTableRow({ match, onSave, compactDate = false }) {
 function PublicPredictionTableRow({ match, compactDate = false }) {
   const hasPrediction = Boolean(match.prediction);
   const hasResult = match.home_score != null && match.away_score != null;
+  const predictionHidden = Boolean(match.predictionHidden);
 
   return (
     <tr>
@@ -2171,6 +2177,12 @@ function PublicPredictionTableRow({ match, compactDate = false }) {
               {match.stage !== "GROUP" && <small>Classificado: {match.prediction.qualified_team || "-"}</small>}
               <small>{match.points || 0} pts</small>
             </div>
+          ) : predictionHidden ? (
+            <div className="public-inline-prediction prediction-hidden-box">
+              <span>Palpite protegido</span>
+              <strong>Liberado no inicio do jogo</strong>
+              <small>{match.predictionAvailableAt ? formatDate(match.predictionAvailableAt) : "Aguardando inicio"}</small>
+            </div>
           ) : (
             <span className="status-dot pending">Sem palpite</span>
           )}
@@ -2181,7 +2193,7 @@ function PublicPredictionTableRow({ match, compactDate = false }) {
           </div>
         </div>
       </td>
-      <td><span className={`status-dot ${hasPrediction ? "done" : "pending"}`}>{hasPrediction ? "Preenchido" : "Pendente"}</span></td>
+      <td><span className={`status-dot ${hasPrediction ? "done" : predictionHidden ? "locked" : "pending"}`}>{hasPrediction ? "Preenchido" : predictionHidden ? "Protegido" : "Pendente"}</span></td>
     </tr>
   );
 }
@@ -2910,7 +2922,25 @@ function AdminBonusResults({ value, onChange, onSave, onReset, saving, resetting
 function formatAuditPayload(data) {
   if (!data) return "-";
 
+  const settingLabels = {
+    phase2Enabled: {
+      label: "Mata-mata",
+      value: (enabled) => enabled ? "ativado" : "desativado"
+    },
+    participantViewsEnabled: {
+      label: "Visualizacao de palpites",
+      value: (enabled) => enabled ? "liberada antes dos jogos" : "somente apos inicio do jogo"
+    },
+    maintenanceEnabled: {
+      label: "Manutencao",
+      value: (enabled) => enabled ? "ativa" : "desativada"
+    }
+  };
+
   const parts = [];
+  for (const [key, config] of Object.entries(settingLabels)) {
+    if (data[key] != null) parts.push(`${config.label}: ${config.value(Boolean(data[key]))}`);
+  }
   if (data.match) parts.push(data.match);
   if (data.roundName) parts.push(data.roundName);
   if (data.homeScore != null || data.awayScore != null) parts.push(`${data.homeScore ?? "-"} x ${data.awayScore ?? "-"}`);
@@ -3009,6 +3039,7 @@ function AuditHistory({ logs }) {
           <option value="MATCH_RESULT">Resultado do jogo</option>
           <option value="KNOCKOUT_MATCH">Confronto do mata-mata</option>
           <option value="BONUS_RESULT">Resultado bonus</option>
+          <option value="SETTING">Configuracao</option>
         </select>
         <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
           <option value="ALL">Todas as acoes</option>
@@ -3095,7 +3126,7 @@ function AdminUsers({
             <span className="phase-toggle-track">
               <span className="phase-toggle-thumb" />
             </span>
-            <span>{participantViewsEnabled ? "Visualizacao liberada" : "Visualizacao bloqueada"}</span>
+            <span>{participantViewsEnabled ? "Liberado antes dos jogos" : "Somente apos inicio"}</span>
           </button>
         </div>
       </div>

@@ -1152,6 +1152,23 @@ input {
   color: #93c5fd;
 }
 
+.public-inline-prediction.prediction-hidden-box {
+  border-color: rgba(250, 204, 21, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(250, 204, 21, 0.12), transparent 48%),
+    rgba(8, 18, 38, 0.58);
+}
+
+.public-inline-prediction.prediction-hidden-box strong {
+  background: rgba(250, 204, 21, 0.14);
+  color: #fde68a;
+}
+
+.prediction-hidden-note {
+  color: #fde68a;
+  font-weight: 800;
+}
+
 .public-inline-prediction,
 .public-official-result {
   min-height: 46px;

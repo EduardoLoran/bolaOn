@@ -226,6 +226,26 @@ function getMaintenanceEnabled() {
   return row?.value === "1";
 }
 
+function hasKickoffStarted(kickoffAt, now = new Date()) {
+  const kickoffDate = new Date(kickoffAt);
+  return kickoffAt && !Number.isNaN(kickoffDate.getTime()) && now >= kickoffDate;
+}
+
+function hasCompetitionStarted(now = new Date()) {
+  const firstMatch = db
+    .prepare(
+      `
+      SELECT kickoff_at
+      FROM matches
+      ORDER BY kickoff_at
+      LIMIT 1
+    `
+    )
+    .get();
+
+  return firstMatch ? hasKickoffStarted(firstMatch.kickoff_at, now) : false;
+}
+
 function getDateKey(value) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) return "Sem data";
@@ -485,10 +505,8 @@ app.get("/api/ranking", requireAuth, (_req, res) => {
 });
 
 app.get("/api/participants/:id/public", requireAuth, (req, res) => {
-  if (!getParticipantViewsEnabled()) {
-    return res.status(403).json({ message: "Visualizacao dos participantes desativada pelo administrador." });
-  }
-
+  const participantViewsEnabled = getParticipantViewsEnabled();
+  const now = new Date();
   const participant = db
     .prepare(
       `
@@ -536,7 +554,9 @@ app.get("/api/participants/:id/public", requireAuth, (req, res) => {
 
   const predictions = matches.map((match) => {
     const hasPrediction = match.prediction_home_score != null && match.prediction_away_score != null;
-    const prediction = hasPrediction ? {
+    const matchStarted = hasKickoffStarted(match.kickoff_at, now);
+    const canShowPrediction = participantViewsEnabled || matchStarted;
+    const prediction = hasPrediction && canShowPrediction ? {
       home_score: match.prediction_home_score,
       away_score: match.prediction_away_score,
       qualified_team: match.prediction_qualified_team
@@ -553,6 +573,8 @@ app.get("/api/participants/:id/public", requireAuth, (req, res) => {
       away_score: match.away_score,
       qualified_team: match.qualified_team,
       prediction,
+      predictionHidden: !canShowPrediction,
+      predictionAvailableAt: !canShowPrediction ? match.kickoff_at : null,
       updatedAt: match.prediction_updated_at,
       points: calculateMatchPoints(
         {
@@ -566,7 +588,7 @@ app.get("/api/participants/:id/public", requireAuth, (req, res) => {
     };
   });
 
-  const bonusPrediction = db
+  const rawBonusPrediction = db
     .prepare(
       `
       SELECT
@@ -584,11 +606,19 @@ app.get("/api/participants/:id/public", requireAuth, (req, res) => {
     topScorer: "",
     surpriseTeam: ""
   };
+  const bonusPredictionHidden = !participantViewsEnabled && !hasCompetitionStarted(now);
+  const bonusPrediction = bonusPredictionHidden ? {
+    champion: "",
+    runnerUp: "",
+    topScorer: "",
+    surpriseTeam: ""
+  } : rawBonusPrediction;
 
   return res.json({
     participant,
     predictions,
-    bonusPrediction
+    bonusPrediction,
+    bonusPredictionHidden
   });
 });
 
@@ -660,11 +690,11 @@ app.get("/api/scoreboard", requireAuth, (req, res) => {
       WHERE (${visibleMatchesWhereClause()})
         AND users.is_admin = 0
         AND users.is_active = 1
-        AND (? = 1 OR users.id = ?)
       ORDER BY matches.kickoff_at, matches.id, participantName
     `
     )
-    .all(participantViewsEnabled ? 1 : 0, req.user.sub)
+    .all()
+    .filter((row) => participantViewsEnabled || row.userId === req.user.sub || hasKickoffStarted(row.kickoffAt))
     .map((row) => {
       const match = {
         stage: row.stage,
@@ -1157,6 +1187,7 @@ app.get("/api/admin/phase2-settings", requireAuth, requireAdmin, (_req, res) => 
 
 app.put("/api/admin/phase2-settings", requireAuth, requireAdmin, (req, res) => {
   const enabled = req.body.enabled ? "1" : "0";
+  const previousValue = getPhase2Enabled();
 
   db.prepare(
     `
@@ -1165,6 +1196,18 @@ app.put("/api/admin/phase2-settings", requireAuth, requireAdmin, (req, res) => {
     WHERE key = 'phase2_enabled'
   `
   ).run(enabled);
+
+  writeAuditLog({
+    eventType: "SETTING",
+    action: "UPDATE",
+    userId: req.user.sub,
+    previousData: {
+      phase2Enabled: previousValue
+    },
+    nextData: {
+      phase2Enabled: enabled === "1"
+    }
+  });
 
   return res.json({ enabled: enabled === "1" });
 });
