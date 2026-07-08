@@ -250,6 +250,13 @@ if (!participantViewsSetting) {
   `
   ).run();
 }
+db.prepare(
+  `
+  UPDATE app_settings
+  SET value = '0', updated_at = CURRENT_TIMESTAMP
+  WHERE key = 'participant_views_enabled' AND value <> '0'
+`
+).run();
 
 const maintenanceSetting = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("maintenance_enabled");
 if (!maintenanceSetting) {

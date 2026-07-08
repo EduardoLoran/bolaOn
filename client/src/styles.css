@@ -3652,11 +3652,70 @@ input {
   transform: translateX(20px);
 }
 
+.phase-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.82;
+}
+
+.phase-toggle.locked-toggle {
+  border-color: rgba(250, 204, 21, 0.22);
+  color: #fde68a;
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.phase-toggle.locked-toggle .phase-toggle-track {
+  background: rgba(148, 163, 184, 0.28);
+}
+
 .admin-toggle-group {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.admin-locked-panel {
+  overflow: hidden;
+}
+
+.admin-lock-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(250, 204, 21, 0.2);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(250, 204, 21, 0.12), transparent 42%),
+    rgba(8, 18, 38, 0.62);
+}
+
+.admin-lock-box > span {
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(250, 204, 21, 0.12);
+  color: #fde68a;
+}
+
+.admin-lock-box svg {
+  width: 24px;
+  height: 24px;
+}
+
+.admin-lock-box div {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-lock-box strong {
+  color: #f8fafc;
+}
+
+.admin-lock-box small {
+  color: #cbd5e1;
 }
 
 .maintenance-screen {

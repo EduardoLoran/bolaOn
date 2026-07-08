@@ -3325,100 +3325,21 @@ function auditActionLabel(action) {
   );
 }
 
-function AuditHistory({ logs }) {
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("ALL");
-  const [actionFilter, setActionFilter] = useState("ALL");
-  const filteredLogs = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    return logs.filter((log) => {
-      const typeMatches = typeFilter === "ALL" || log.eventType === typeFilter;
-      const actionMatches = actionFilter === "ALL" || log.action === actionFilter;
-      const searchable = [
-        log.userName,
-        log.homeTeam,
-        log.awayTeam,
-        log.roundName,
-        log.eventType,
-        log.action,
-        formatAuditPayload(log.previousData),
-        formatAuditPayload(log.nextData)
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return typeMatches && actionMatches && (!normalizedSearch || searchable.includes(normalizedSearch));
-    });
-  }, [logs, search, typeFilter, actionFilter]);
-
+function AuditHistory() {
   return (
-    <div className="panel admin-panel">
+    <div className="panel admin-panel admin-locked-panel">
       <div className="admin-panel-header">
         <div>
-          <h2>Historico de movimentos</h2>
-          <p>Registros de criacao e edicao de palpites de jogos e bonus.</p>
+          <h2>Historico bloqueado</h2>
+          <p>Os registros de palpites ficam ocultos para proteger as escolhas dos participantes antes dos jogos.</p>
         </div>
       </div>
-
-      <div className="audit-filters">
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar por usuario, jogo, selecao ou palpite"
-        />
-        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-          <option value="ALL">Todos os tipos</option>
-          <option value="MATCH_PREDICTION">Palpite de jogo</option>
-          <option value="BONUS_PREDICTION">Palpite bonus</option>
-          <option value="MATCH_RESULT">Resultado do jogo</option>
-          <option value="KNOCKOUT_MATCH">Confronto do mata-mata</option>
-          <option value="BONUS_RESULT">Resultado bonus</option>
-          <option value="SETTING">Configuracao</option>
-        </select>
-        <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
-          <option value="ALL">Todas as acoes</option>
-          <option value="CREATE">Criado</option>
-          <option value="UPDATE">Editado</option>
-          <option value="RESET">Zerado</option>
-          <option value="DELETE">Excluido</option>
-        </select>
-      </div>
-
-      <div className="audit-table-wrap">
-        <table className="audit-table">
-          <thead>
-            <tr>
-              <th>Data/Hora</th>
-              <th>Usuario</th>
-              <th>Tipo</th>
-              <th>Acao</th>
-              <th>Jogo</th>
-              <th>Antes</th>
-              <th>Depois</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredLogs.length > 0 ? (
-              filteredLogs.map((log) => (
-                <tr key={log.id}>
-                  <td>{formatDate(log.createdAt)}</td>
-                  <td>{log.userName || "Usuario removido"}</td>
-                  <td>{auditTypeLabel(log.eventType)}</td>
-                  <td>{auditActionLabel(log.action)}</td>
-                  <td>{log.homeTeam ? `${log.homeTeam} x ${log.awayTeam}` : "-"}</td>
-                  <td>{formatAuditPayload(log.previousData)}</td>
-                  <td>{formatAuditPayload(log.nextData)}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7">Nenhum historico encontrado para os filtros atuais.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="admin-lock-box">
+        <span><NavIcon type="history" /></span>
+        <div>
+          <strong>Visualizacao desativada</strong>
+          <small>O historico sensivel nao e carregado no painel administrativo.</small>
+        </div>
       </div>
     </div>
   );
@@ -3455,14 +3376,14 @@ function AdminUsers({
             <span>{maintenanceEnabled ? "Manutencao ativa" : "Manutencao desativada"}</span>
           </button>
           <button
-            className={`phase-toggle ${participantViewsEnabled ? "enabled" : ""}`}
-            onClick={onToggleParticipantViews}
+            className="phase-toggle locked-toggle"
             type="button"
+            disabled
           >
             <span className="phase-toggle-track">
               <span className="phase-toggle-thumb" />
             </span>
-            <span>{participantViewsEnabled ? "Liberado antes dos jogos" : "Somente apos inicio"}</span>
+            <span>Palpites travados</span>
           </button>
         </div>
       </div>
@@ -4199,13 +4120,12 @@ export default function App() {
       setMaintenanceEnabled(Boolean(dashboardData.settings?.maintenanceEnabled));
 
       if (Boolean(me.is_admin)) {
-        const [adminKnockoutMatches, allAdminMatches, phase2Settings, adminBonusData, adminUserData, auditLogData, maintenanceSettings] = await Promise.all([
+        const [adminKnockoutMatches, allAdminMatches, phase2Settings, adminBonusData, adminUserData, maintenanceSettings] = await Promise.all([
           request("/admin/knockout-matches"),
           request("/admin/matches"),
           request("/admin/phase2-settings"),
           request("/admin/bonus-results"),
           request("/admin/users"),
-          request("/admin/audit-logs"),
           request("/admin/maintenance-settings")
         ]);
         const participantViewsSettings = await request("/admin/participant-views-settings").catch(() => ({
@@ -4218,7 +4138,7 @@ export default function App() {
         setMaintenanceEnabled(Boolean(maintenanceSettings.enabled));
         setAdminBonus(adminBonusData);
         setAdminUsers(adminUserData);
-        setAuditLogs(auditLogData);
+        setAuditLogs([]);
       } else {
         setKnockoutMatches([]);
         setAdminMatches([]);
@@ -4512,13 +4432,8 @@ export default function App() {
   }
 
   async function handleToggleParticipantViews() {
-    const nextValue = !participantViewsEnabled;
-    await request("/admin/participant-views-settings", {
-      method: "PUT",
-      body: JSON.stringify({ enabled: nextValue })
-    });
-    setParticipantViewsEnabled(nextValue);
-    await loadApp();
+    setParticipantViewsEnabled(false);
+    emitToast("info", "Visualizacao de palpites esta travada antes do inicio dos jogos.");
   }
 
   async function handleToggleMaintenance() {

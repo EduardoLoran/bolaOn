@@ -18,6 +18,8 @@ const PORT = process.env.PORT || 3333;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const clientDistPath = path.join(__dirname, "..", "..", "client", "dist");
+const participantViewsLocked = true;
+const adminAuditLogsLocked = true;
 
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
@@ -217,6 +219,8 @@ function getPhase2Enabled() {
 }
 
 function getParticipantViewsEnabled() {
+  if (participantViewsLocked) return false;
+
   const row = db.prepare("SELECT value FROM app_settings WHERE key = 'participant_views_enabled'").get();
   return row?.value === "1";
 }
@@ -992,6 +996,10 @@ app.delete("/api/admin/bonus-results", requireAuth, requireAdmin, (req, res) => 
 });
 
 app.get("/api/admin/audit-logs", requireAuth, requireAdmin, (req, res) => {
+  if (adminAuditLogsLocked) {
+    return res.status(403).json({ message: "Historico bloqueado para proteger os palpites dos participantes." });
+  }
+
   const limit = Math.min(Number(req.query.limit) || 200, 500);
   const rows = db
     .prepare(
@@ -1217,7 +1225,7 @@ app.get("/api/admin/participant-views-settings", requireAuth, requireAdmin, (_re
 });
 
 app.put("/api/admin/participant-views-settings", requireAuth, requireAdmin, (req, res) => {
-  const enabled = req.body.enabled ? "1" : "0";
+  const enabled = participantViewsLocked ? "0" : req.body.enabled ? "1" : "0";
   const previousValue = getParticipantViewsEnabled();
 
   db.prepare(
